@@ -143,15 +143,23 @@ def load_commits(repo_path: str) -> list[dict]:
         commits = []
         for r in rows:
             try:
-                dt = datetime.strptime(r[3], "%Y-%m-%d %H:%M:%S")
+                dt = datetime.strptime(r[4], "%Y-%m-%d %H:%M:%S")
             except ValueError:
                 dt = datetime.now()
             commits.append({
-                "hash": r[0], "author": r[2], "email": r[3] if False else r[3],
+                "hash": r[0], "author": r[2], "email": r[3],
                 "date": dt, "message": r[5],
                 "additions": r[6], "deletions": r[7],
             })
         return commits
+
+
+def clear_repo_data():
+    """Clear cached repos and commits; keep scan_state."""
+    with _lock, _get_conn() as conn:
+        conn.execute("DELETE FROM repos")
+        conn.execute("DELETE FROM commits")
+        conn.commit()
 
 
 def clear_all():

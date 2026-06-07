@@ -86,15 +86,15 @@
 <script setup>
 import { computed } from 'vue'
 import { useI18n } from '../i18n'
-import { state } from '../stores/data'
+import { weatherState } from '../stores/weather'
 import { WEATHER_EMOJI_MAP } from '../utils/constants'
 
 const { t, locale } = useI18n()
 
-const weatherCurrent = computed(() => state.weatherCurrent)
-const weatherForecast = computed(() => state.weatherForecast)
-const weatherLoading = computed(() => state.weatherLoading)
-const weatherError = computed(() => state.weatherError && !weatherCurrent.value)
+const weatherCurrent = computed(() => weatherState.current)
+const weatherForecast = computed(() => weatherState.forecast)
+const weatherLoading = computed(() => weatherState.loading)
+const weatherError = computed(() => weatherState.error && !weatherCurrent.value)
 
 function getWeatherEmoji(icon) {
   return WEATHER_EMOJI_MAP[icon] || WEATHER_EMOJI_MAP.unknown

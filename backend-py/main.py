@@ -529,6 +529,23 @@ def scan_metadata(repo_path: str) -> Optional[dict]:
         return None
 
 
+def resolve_scan_path(path: str) -> str:
+    """解析扫描路径；若目录下无仓库则向上查找父目录。"""
+    p = Path(path).expanduser().resolve()
+    if not p.exists():
+        return str(p)
+
+    current = p
+    for _ in range(5):
+        if discover_repos(str(current)):
+            return str(current)
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return str(p)
+
+
 def discover_repos(root_path: str) -> list[dict]:
     """扫描目录下所有 Git 仓库。"""
     repos = []
@@ -1118,15 +1135,22 @@ async def api_set_scan_path(request: Request):
     if not path:
         raise HTTPException(400, "Path is required")
 
+    resolved = resolve_scan_path(path)
     store.clear_all()
-    store.set_scan_path(path)
-    repos = discover_repos(path)
+    database.clear_repo_data()
+    store.set_scan_path(resolved)
+    database.save_scan_path(resolved)
+    repos = discover_repos(resolved)
     store.register_repos(repos)
+
+    message = "Path set successfully, data will be loaded on demand"
+    if resolved != str(Path(path).expanduser().resolve()):
+        message = f"No repos in {path}; using parent directory {resolved}"
 
     return {
         "code": 200,
-        "data": {"path": path},
-        "message": "Path set successfully, data will be loaded on demand",
+        "data": {"path": resolved},
+        "message": message,
     }
 
 
@@ -2010,15 +2034,16 @@ async def get_budget():
         "percentUsed": pct, "isOverBudget": current_spent > monthly,
     })
 
-class BudgetSetBody(BaseModel):
-    monthlyBudget: float
-
 @app.post("/api/stats/tokens/budget")
-async def set_budget(body: BudgetSetBody):
+async def set_budget(request: Request):
+    body = await request.json()
+    monthly = body.get("monthlyBudget")
+    if monthly is None:
+        raise HTTPException(400, "monthlyBudget is required")
     budget_cfg = _read_budget()
-    budget_cfg["monthlyBudget"] = body.monthlyBudget
+    budget_cfg["monthlyBudget"] = float(monthly)
     _write_budget(budget_cfg)
-    return JSONResponse({"success": True, "monthlyBudget": body.monthlyBudget})
+    return JSONResponse({"success": True, "monthlyBudget": budget_cfg["monthlyBudget"]})
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  STREAK — 连续贡献天数统计
@@ -2355,19 +2380,25 @@ if __name__ == "__main__":
                         help="不自动打开浏览器")
     args = parser.parse_args()
 
-    # Restore state from database if available, otherwise scan fresh
+    # Prefer a saved path that still contains repos; otherwise resolve cwd/arg
     saved_path = database.get_scan_path()
-    if saved_path and not args.scan_path:
-        args.scan_path = saved_path
-
+    resolved_saved = resolve_scan_path(saved_path) if saved_path else ""
+    resolved_arg = resolve_scan_path(args.scan_path or os.getcwd())
+    if resolved_saved and discover_repos(resolved_saved):
+        args.scan_path = resolved_saved
+    else:
+        args.scan_path = resolved_arg
     database.save_scan_path(args.scan_path)
     store.set_scan_path(args.scan_path)
     repos = discover_repos(args.scan_path)
     store.register_repos(repos)
+    discovered_paths = {r["path"] for r in repos}
 
-    # Restore cached repos from DB
+    # Restore cached repos from DB (only those under current scan path)
     db_repos = database.load_repos()
     for db_repo in db_repos:
+        if db_repo["path"] not in discovered_paths:
+            continue
         if db_repo["path"] not in store.repos:
             store.repos[db_repo["path"]] = {
                 "path": db_repo["path"], "name": db_repo["name"],
