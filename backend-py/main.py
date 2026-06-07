@@ -54,8 +54,19 @@ def gitee_api(path: str) -> dict:
 
 
 def gitee_list_repos(owner: str, page: int = 1, per_page: int = 30) -> list[dict]:
-    """获取某用户/组织的公开仓库列表。"""
-    raw = gitee_api(f"/users/{owner}/repos?page={page}&per_page={per_page}&sort=updated")
+    """获取某用户/组织的公开仓库列表（先尝试组织，再尝试用户）。"""
+    raw = None
+    # 先尝试组织
+    try:
+        raw = gitee_api(f"/orgs/{owner}/repos?page={page}&per_page={per_page}&sort=updated")
+    except HTTPException:
+        pass
+    # 如果组织不成功，尝试用户
+    if raw is None or not isinstance(raw, list):
+        try:
+            raw = gitee_api(f"/users/{owner}/repos?page={page}&per_page={per_page}&sort=updated")
+        except HTTPException:
+            pass
     if not isinstance(raw, list):
         return []
     return [{
