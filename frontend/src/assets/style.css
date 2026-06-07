@@ -1,0 +1,433 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+/* ══════════════════════════════════════════════════════════════
+   CYBERPUNK THEME VARIABLES
+   ══════════════════════════════════════════════════════════════ */
+:root {
+  --neon-cyan: #00f5ff;
+  --neon-magenta: #ff00ff;
+  --neon-yellow: #ffd700;
+  --neon-green: #00ff88;
+  --neon-red: #ff3366;
+  --neon-blue: #4488ff;
+  --neon-purple: #a78bfa;
+  --bg-deep: #060b1f;
+  --bg-mid: #0d1235;
+  --bg-card: rgba(15, 20, 45, 0.65);
+  --border-glow: rgba(0, 245, 255, 0.25);
+  --text-primary: #e0e6ff;
+  --text-dim: #64748b;
+  --scanline-opacity: 0.04;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Rajdhani', sans-serif;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CRT SCANLINE OVERLAY
+   ══════════════════════════════════════════════════════════════ */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, var(--scanline-opacity)) 2px,
+    rgba(0, 0, 0, var(--scanline-opacity)) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BACKGROUND EFFECTS — Neon orbs + particles
+   ══════════════════════════════════════════════════════════════ */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(circle at 15% 40%, rgba(0, 245, 255, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 75% 70%, rgba(255, 0, 255, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 50% 15%, rgba(255, 215, 0, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 85% 25%, rgba(0, 255, 136, 0.06) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: -1;
+  animation: backgroundShift 15s ease-in-out infinite;
+}
+
+@keyframes backgroundShift {
+  0%, 100% { opacity: 1; }
+  25% { opacity: 0.75; }
+  50% { opacity: 0.85; }
+  75% { opacity: 0.7; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SCREEN FLICKER — Subtle CRT flicker
+   ══════════════════════════════════════════════════════════════ */
+@keyframes screenFlicker {
+  0%, 99.5%, 100% { opacity: 1; }
+  99.6% { opacity: 0.85; }
+  99.7% { opacity: 0.95; }
+  99.8% { opacity: 0.9; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   GLITCH TEXT ANIMATION
+   ══════════════════════════════════════════════════════════════ */
+@keyframes glitchText1 {
+  0%, 100% { transform: translate(0); }
+  20% { transform: translate(-2px, 1px); }
+  40% { transform: translate(2px, -1px); }
+  60% { transform: translate(-1px, -1px); }
+  80% { transform: translate(1px, 1px); }
+}
+
+@keyframes glitchText2 {
+  0%, 100% { transform: translate(0); }
+  20% { transform: translate(2px, -1px); }
+  40% { transform: translate(-2px, 1px); }
+  60% { transform: translate(1px, 1px); }
+  80% { transform: translate(-1px, -1px); }
+}
+
+.glitch-text {
+  position: relative;
+  display: inline-block;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+
+.glitch-text:hover::before {
+  color: var(--neon-cyan);
+  animation: glitchText1 0.15s infinite;
+  opacity: 0.8;
+  z-index: -1;
+}
+
+.glitch-text:hover::after {
+  color: var(--neon-magenta);
+  animation: glitchText2 0.2s infinite;
+  opacity: 0.8;
+  z-index: -2;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   NEON TEXT GLOW
+   ══════════════════════════════════════════════════════════════ */
+@keyframes neonPulse {
+  0%, 100% {
+    text-shadow: 0 0 4px currentColor, 0 0 8px currentColor, 0 0 12px currentColor;
+  }
+  50% {
+    text-shadow: 0 0 2px currentColor, 0 0 4px currentColor, 0 0 8px currentColor;
+  }
+}
+
+.neon-text {
+  animation: neonPulse 2s ease-in-out infinite;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CARD — Cyberpunk glass-morphism
+   ══════════════════════════════════════════════════════════════ */
+.card {
+  background: var(--bg-card);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  border: 1px solid var(--border-glow);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Corner neon accents */
+.card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 30px;
+  height: 30px;
+  border-top: 2px solid var(--neon-cyan);
+  border-right: 2px solid var(--neon-cyan);
+  border-radius: 0 16px 0 4px;
+  opacity: 0.5;
+  transition: opacity 0.3s;
+  box-shadow: 0 0 8px rgba(0, 245, 255, 0.5), 0 0 20px rgba(0, 245, 255, 0.2);
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 30px;
+  height: 30px;
+  border-bottom: 2px solid var(--neon-magenta);
+  border-left: 2px solid var(--neon-magenta);
+  border-radius: 0 4px 0 16px;
+  opacity: 0.5;
+  transition: opacity 0.3s;
+  box-shadow: 0 0 8px rgba(255, 0, 255, 0.5), 0 0 20px rgba(255, 0, 255, 0.2);
+}
+
+.card:hover {
+  border-color: rgba(0, 245, 255, 0.5);
+  box-shadow:
+    0 16px 48px rgba(0, 245, 255, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 1px 0 rgba(255, 255, 255, 0.12) inset;
+  transform: translateY(-3px);
+}
+
+.card:hover::after,
+.card:hover::before {
+  opacity: 1;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BUTTONS — Neon gradient with glitch hover
+   ══════════════════════════════════════════════════════════════ */
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--neon-cyan) 0%, var(--neon-magenta) 100%);
+  color: white;
+  cursor: pointer;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s;
+  box-shadow: 0 4px 20px rgba(0, 245, 255, 0.35), 0 0 40px rgba(255, 0, 255, 0.15);
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.btn:hover::before {
+  width: 400px;
+  height: 400px;
+}
+
+.btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(0, 245, 255, 0.5), 0 0 60px rgba(255, 0, 255, 0.25);
+}
+
+.btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 245, 255, 0.3);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
+/* Secondary button — outlined */
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--neon-cyan);
+  box-shadow: 0 0 10px rgba(0, 245, 255, 0.15);
+  color: var(--neon-cyan);
+}
+
+.btn-outline:hover {
+  background: rgba(0, 245, 255, 0.1);
+  box-shadow: 0 0 20px rgba(0, 245, 255, 0.3);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SCROLLBAR — Neon cyberpunk style
+   ══════════════════════════════════════════════════════════════ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-deep);
+  border-left: 1px solid rgba(0, 245, 255, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--neon-cyan), var(--neon-magenta));
+  border-radius: 4px;
+  box-shadow: 0 0 8px rgba(0, 245, 255, 0.3);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--neon-magenta), var(--neon-cyan));
+  box-shadow: 0 0 16px rgba(255, 0, 255, 0.4);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SELECTION — Neon highlight
+   ══════════════════════════════════════════════════════════════ */
+::selection {
+  background: rgba(0, 245, 255, 0.3);
+  color: white;
+  text-shadow: 0 0 4px var(--neon-cyan);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LOADING SKELETON
+   ══════════════════════════════════════════════════════════════ */
+@keyframes skeletonShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-line,
+.skeleton-circle {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 245, 255, 0.05) 0%,
+    rgba(0, 245, 255, 0.15) 50%,
+    rgba(0, 245, 255, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.8s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+.skeleton-circle {
+  border-radius: 50%;
+}
+
+.skeleton-line.w20 { width: 20%; height: 14px; }
+.skeleton-line.w30 { width: 30%; height: 14px; }
+.skeleton-line.w40 { width: 40%; height: 14px; }
+.skeleton-line.w50 { width: 50%; height: 14px; }
+.skeleton-line.w60 { width: 60%; height: 14px; }
+.skeleton-line.w70 { width: 70%; height: 14px; }
+.skeleton-line.w80 { width: 80%; height: 14px; }
+.skeleton-line.w90 { width: 90%; height: 14px; }
+.skeleton-line.w100 { width: 100%; height: 14px; }
+
+/* ══════════════════════════════════════════════════════════════
+   UTILITY — Scanline section divider
+   ══════════════════════════════════════════════════════════════ */
+.section-divider {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--neon-cyan),
+    var(--neon-magenta),
+    var(--neon-cyan),
+    transparent
+  );
+  margin: 1.5rem 0;
+  opacity: 0.4;
+  box-shadow: 0 0 10px rgba(0, 245, 255, 0.3);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DATA ROW — Terminal-style row
+   ══════════════════════════════════════════════════════════════ */
+.data-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(0, 245, 255, 0.08);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.85rem;
+}
+
+.data-row:hover {
+  background: rgba(0, 245, 255, 0.05);
+}
+
+.data-row .key {
+  color: var(--neon-cyan);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.data-row .val {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   HOLOGRAM EFFECT — For special panels
+   ══════════════════════════════════════════════════════════════ */
+@keyframes hologramFlicker {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 0.8; }
+}
+
+.hologram {
+  position: relative;
+}
+
+.hologram::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 245, 255, 0.08) 0%,
+    transparent 40%,
+    rgba(255, 0, 255, 0.06) 60%,
+    transparent 100%
+  );
+  pointer-events: none;
+  animation: hologramFlicker 3s ease-in-out infinite;
+}

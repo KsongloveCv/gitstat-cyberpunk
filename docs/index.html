@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitStat - Git 提交统计与可视化分析平台</title>
+  <meta name="description" content="GitStat 是一个轻量级的 Git 提交统计与可视化分析平台。扫描 Git 仓库，分析提交历史，通过赛博朋克风格的 Web 界面呈现交互式图表。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Rajdhani', sans-serif;
+      background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0d1235 100%);
+      color: #e0e6ff;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background:
+        radial-gradient(circle at 20% 50%, rgba(0, 245, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(255, 0, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 40% 20%, rgba(255, 215, 0, 0.04) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: -1;
+      animation: bgShift 20s ease-in-out infinite;
+    }
+
+    @keyframes bgShift {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 6rem 0 4rem;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 10%;
+      width: 80%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(0, 245, 255, 0.5), rgba(255, 0, 255, 0.5), transparent);
+    }
+
+    .hero-badge {
+      display: inline-block;
+      padding: 0.35rem 1rem;
+      border: 1px solid rgba(255, 215, 0, 0.3);
+      border-radius: 100px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.75rem;
+      letter-spacing: 2px;
+      color: #ffd700;
+      background: rgba(255, 215, 0, 0.08);
+      margin-bottom: 1.5rem;
+      text-transform: uppercase;
+    }
+
+    .hero h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 4rem;
+      font-weight: 900;
+      letter-spacing: 4px;
+      background: linear-gradient(135deg, #00f5ff 0%, #ff00ff 50%, #ffd700 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+    }
+
+    .hero-sub {
+      font-size: 1.3rem;
+      color: rgba(224, 230, 255, 0.7);
+      max-width: 600px;
+      margin: 0 auto 2rem;
+      line-height: 1.6;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.85rem 2rem;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 600;
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+      text-decoration: none;
+      color: #fff;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+
+    .btn:hover::before {
+      width: 400px;
+      height: 400px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00f5ff 0%, #ff00ff 100%);
+      box-shadow: 0 4px 20px rgba(0, 245, 255, 0.4);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 35px rgba(0, 245, 255, 0.6);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid rgba(0, 245, 255, 0.5);
+      box-shadow: none;
+    }
+
+    .btn-secondary:hover {
+      transform: translateY(-3px);
+      border-color: #00f5ff;
+      box-shadow: 0 0 25px rgba(0, 245, 255, 0.3);
+      background: rgba(0, 245, 255, 0.08);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    /* Section */
+    .section {
+      padding: 5rem 0;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 3.5rem;
+    }
+
+    .section-header h2 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+      background: linear-gradient(135deg, #00f5ff, #ff00ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .section-header p {
+      color: rgba(224, 230, 255, 0.6);
+      font-size: 1.1rem;
+    }
+
+    .section-header .accent-line {
+      width: 60px;
+      height: 2px;
+      background: linear-gradient(90deg, #00f5ff, #ff00ff);
+      margin: 1rem auto 0;
+      border-radius: 2px;
+    }
+
+    /* Features */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .feature-card {
+      background: rgba(20, 25, 50, 0.6);
+      backdrop-filter: blur(20px);
+      border-radius: 16px;
+      padding: 2rem;
+      border: 1px solid rgba(0, 245, 255, 0.15);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(0, 245, 255, 0.06), transparent);
+      transition: left 0.5s;
+    }
+
+    .feature-card:hover::before {
+      left: 100%;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(0, 245, 255, 0.4);
+      box-shadow: 0 8px 32px rgba(0, 245, 255, 0.15);
+      transform: translateY(-3px);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      background: rgba(0, 245, 255, 0.1);
+      border: 1px solid rgba(0, 245, 255, 0.2);
+    }
+
+    .feature-card h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+
+    .feature-card .feature-sub {
+      font-size: 0.8rem;
+      color: rgba(0, 245, 255, 0.5);
+      font-family: 'Orbitron', sans-serif;
+      letter-spacing: 1px;
+      margin-bottom: 0.5rem;
+    }
+
+    .feature-card p {
+      color: rgba(224, 230, 255, 0.7);
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+
+    /* Screenshots */
+    .screenshots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .screenshot-img {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(0, 245, 255, 0.15);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: block;
+      cursor: pointer;
+    }
+
+    .screenshot-img:hover {
+      border-color: rgba(0, 245, 255, 0.4);
+      box-shadow: 0 8px 32px rgba(0, 245, 255, 0.15);
+      transform: translateY(-3px);
+    }
+
+    /* Lightbox */
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      background: rgba(5, 8, 22, 0.92);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: lbFadeIn 0.25s ease;
+    }
+
+    .lightbox.hide {
+      animation: lbFadeOut 0.2s ease forwards;
+    }
+
+    @keyframes lbFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes lbFadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+
+    .lightbox img {
+      max-width: 90vw;
+      max-height: 90vh;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 245, 255, 0.25);
+      box-shadow: 0 0 60px rgba(0, 245, 255, 0.2), 0 0 120px rgba(255, 0, 255, 0.1);
+      animation: lbZoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .lightbox.hide img {
+      animation: lbZoomOut 0.2s ease forwards;
+    }
+
+    @keyframes lbZoomIn {
+      from { transform: scale(0.85); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes lbZoomOut {
+      from { transform: scale(1); opacity: 1; }
+      to { transform: scale(0.85); opacity: 0; }
+    }
+
+    .lightbox-close {
+      position: fixed;
+      top: 1rem;
+      right: 1.5rem;
+      width: 40px;
+      height: 40px;
+      border: 1px solid rgba(0, 245, 255, 0.3);
+      border-radius: 8px;
+      background: rgba(10, 14, 39, 0.8);
+      color: #00f5ff;
+      font-size: 1.4rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      z-index: 1000;
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    .lightbox-close:hover {
+      border-color: #00f5ff;
+      background: rgba(0, 245, 255, 0.15);
+      box-shadow: 0 0 20px rgba(0, 245, 255, 0.3);
+    }
+
+    .lightbox-counter {
+      position: fixed;
+      bottom: 1.5rem;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.85rem;
+      color: rgba(0, 245, 255, 0.6);
+      letter-spacing: 2px;
+      z-index: 1000;
+    }
+
+    /* Quick Start */
+    .quick-start-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .step-card {
+      background: rgba(20, 25, 50, 0.6);
+      backdrop-filter: blur(20px);
+      border-radius: 16px;
+      padding: 2rem;
+      border: 1px solid rgba(0, 245, 255, 0.15);
+      position: relative;
+    }
+
+    .step-number {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #00f5ff;
+      letter-spacing: 2px;
+      margin-bottom: 0.75rem;
+    }
+
+    .step-card h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+
+    .step-card p {
+      color: rgba(224, 230, 255, 0.7);
+      font-size: 1rem;
+      line-height: 1.6;
+      margin-bottom: 1rem;
+    }
+
+    .code-block {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(0, 245, 255, 0.2);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.85rem;
+      color: #00f5ff;
+      overflow-x: auto;
+      position: relative;
+      user-select: all;
+      cursor: text;
+    }
+
+    .code-block .prompt {
+      color: rgba(0, 245, 255, 0.5);
+    }
+
+    /* Releases */
+    .release-card {
+      background: rgba(20, 25, 50, 0.6);
+      backdrop-filter: blur(20px);
+      border-radius: 16px;
+      padding: 3rem;
+      border: 1px solid rgba(0, 245, 255, 0.15);
+      text-align: center;
+      max-width: 600px;
+      margin: 0 auto;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .release-card:hover {
+      border-color: rgba(0, 245, 255, 0.4);
+      box-shadow: 0 8px 32px rgba(0, 245, 255, 0.15);
+      transform: translateY(-3px);
+    }
+
+    .release-card h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+
+    .release-card p {
+      color: rgba(224, 230, 255, 0.7);
+      font-size: 1.05rem;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Footer */
+    .footer {
+      padding: 3rem 0;
+      text-align: center;
+      border-top: 1px solid rgba(0, 245, 255, 0.1);
+    }
+
+    .footer p {
+      color: rgba(224, 230, 255, 0.4);
+      font-size: 0.95rem;
+    }
+
+    .footer a {
+      color: rgba(0, 245, 255, 0.6);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer a:hover {
+      color: #00f5ff;
+    }
+
+    /* Nav */
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: rgba(10, 14, 39, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(0, 245, 255, 0.1);
+    }
+
+    .nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+
+    .nav-logo {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: 2px;
+      background: linear-gradient(135deg, #00f5ff, #ff00ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-decoration: none;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: rgba(224, 230, 255, 0.6);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      letter-spacing: 1px;
+      transition: color 0.2s;
+      font-family: 'Orbitron', sans-serif;
+      text-transform: uppercase;
+    }
+
+    .nav-links a:hover {
+      color: #00f5ff;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 2.5rem;
+      }
+
+      .hero-sub {
+        font-size: 1.1rem;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .quick-start-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .screenshots-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-actions {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .btn {
+        width: 100%;
+        max-width: 300px;
+        justify-content: center;
+      }
+
+      .nav-links {
+        gap: 1rem;
+      }
+
+      .nav-links a {
+        font-size: 0.75rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero h1 {
+        font-size: 1.8rem;
+      }
+
+      .section-header h2 {
+        font-size: 1.4rem;
+      }
+
+      .release-card {
+        padding: 2rem 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="container">
+      <a href="#" class="nav-logo">GitStat</a>
+      <ul class="nav-links">
+        <li><a href="#features">特性</a></li>
+        <li><a href="#screenshots">截图</a></li>
+        <li><a href="#quickstart">入门</a></li>
+        <li><a href="#releases">发布</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge"><span id="version-badge">v0.2.0</span></div>
+      <h1>GitStat</h1>
+      <p class="hero-sub">
+        Git 仓库提交统计与可视化分析平台<br>
+        扫描代码仓库，洞察团队活力
+      </p>
+      <div class="hero-actions">
+        <a href="https://github.com/wsyqn6/gitstat/releases" class="btn btn-primary" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          下载最新版
+        </a>
+        <a href="#quickstart" class="btn btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          快速开始
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>功能特性</h2>
+        <p>多维度的 Git 数据洞察工具</p>
+        <div class="accent-line"></div>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00f5ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <div class="feature-sub">Multi-Repo</div>
+          <h3>多仓库扫描</h3>
+          <p>自动扫描指定目录下所有包含 <code>.git</code> 的仓库，支持增量扫描与懒加载，快速发现全部代码库。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ff00ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </div>
+          <div class="feature-sub">Dashboard</div>
+          <h3>今日看板</h3>
+          <p>实时展示今日提交数、增删行数、活跃作者等概览数据，按仓库和作者逐日展开明细。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffd700" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </div>
+          <div class="feature-sub">Analytics</div>
+          <h3>分析中心</h3>
+          <p>每日提交趋势、代码变更分布、开发者排行榜、活动热力图、仓库雷达对比，全方位洞察。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00f5ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          </div>
+          <div class="feature-sub">Heatmap</div>
+          <h3>活动热力图</h3>
+          <p>按星期 × 小时维度展示团队编码活跃时段，快速识别高效工作时间段。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ff00ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <div class="feature-sub">Comparison</div>
+          <h3>仓库对比</h3>
+          <p>通过雷达图从提交数、代码量、活跃天数等多维度对比各仓库的活跃度。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffd700" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </div>
+          <div class="feature-sub">Export</div>
+          <h3>数据导出</h3>
+          <p>一键将全量扫描数据导出为 JSON 文件，便于二次分析和存档备份。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="screenshots">
+    <div class="container">
+      <div class="section-header">
+        <h2>界面预览</h2>
+        <p>赛博朋克风格的可视化界面</p>
+        <div class="accent-line"></div>
+      </div>
+      <div class="screenshots-grid" id="screenshotsGrid">
+        <img class="screenshot-img" src="assets/screenshots/dashboard.webp" alt="Dashboard 看板" onclick="openLightbox(this)">
+        <img class="screenshot-img" src="assets/screenshots/dashboard2.webp" alt="Dashboard 看板 2" onclick="openLightbox(this)">
+        <img class="screenshot-img" src="assets/screenshots/analy.webp" alt="Analytics 分析中心" onclick="openLightbox(this)">
+        <img class="screenshot-img" src="assets/screenshots/analy2.webp" alt="Analytics 分析中心 2" onclick="openLightbox(this)">
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="quickstart">
+    <div class="container">
+      <div class="section-header">
+        <h2>快速开始</h2>
+        <p>一分钟启动可视化面板</p>
+        <div class="accent-line"></div>
+      </div>
+      <div class="quick-start-grid">
+        <div class="step-card">
+          <div class="step-number">STEP 01</div>
+          <h3>启动服务</h3>
+          <p>指定待扫描目录，启动 HTTP 服务：</p>
+          <div class="code-block"><span class="prompt">$</span> gitstat serve D:/work --port 12580</div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">STEP 02</div>
+          <h3>打开浏览器</h3>
+          <p>访问本地地址，即可进入仪表盘：</p>
+          <div class="code-block"><span class="prompt">→</span> http://localhost:12580</div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">STEP 03</div>
+          <h3>探索数据</h3>
+          <p>浏览看板、切换时间范围、筛选仓库，多维度分析提交活动。</p>
+          <div class="code-block" style="color: rgba(224,230,255,0.5);">准备好探索了 🚀</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="releases">
+    <div class="container">
+      <div class="section-header">
+        <h2>版本发布</h2>
+        <p>下载最新版本，跨平台运行</p>
+        <div class="accent-line"></div>
+      </div>
+      <a href="https://github.com/wsyqn6/gitstat/releases" target="_blank" rel="noopener" style="text-decoration: none; display: block;">
+        <div class="release-card">
+          <h3>GitHub Releases</h3>
+          <p>
+            GitStat 提供 Windows、Linux、macOS 三平台预编译二进制<br>
+            单文件分发，下载即用，零依赖
+          </p>
+          <span class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            前往下载
+          </span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <p>
+        <a href="https://github.com/wsyqn6/gitstat" target="_blank" rel="noopener">GitHub</a>
+        &nbsp;·&nbsp;
+        <a href="https://github.com/wsyqn6/gitstat/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+        &nbsp;·&nbsp;
+        <span id="version-footer">v0.2.0</span>
+      </p>
+    </div>
+  </footer>
+<script>
+;(async function() {
+  var LS_KEY = 'gitstat_ver'
+  var els = [document.getElementById('version-badge'), document.getElementById('version-footer')]
+  var cached = localStorage.getItem(LS_KEY)
+  if (cached) els.forEach(function(el) { if (el) el.textContent = cached })
+
+  try {
+    var res = await fetch('https://api.github.com/repos/wsyqn6/gitstat/releases/latest')
+    if (!res.ok) return
+    var data = await res.json()
+    var ver = data.tag_name
+    localStorage.setItem(LS_KEY, ver)
+    els.forEach(function(el) { if (el) el.textContent = ver })
+  } catch(e) {}
+})()
+</script>
+<script>
+var lbImgs = []
+document.querySelectorAll('.screenshot-img').forEach(function(el, i) {
+  lbImgs.push(el)
+  el.setAttribute('data-lb-idx', i)
+})
+
+function openLightbox(el) {
+  var idx = parseInt(el.getAttribute('data-lb-idx'))
+  var lb = document.createElement('div')
+  lb.className = 'lightbox'
+
+  var img = document.createElement('img')
+  img.src = el.src
+  img.alt = el.alt
+
+  var closeBtn = document.createElement('button')
+  closeBtn.className = 'lightbox-close'
+  closeBtn.innerHTML = '&#10005;'
+  closeBtn.onclick = function(e) { e.stopPropagation(); closeLightbox(lb) }
+
+  var counter = document.createElement('div')
+  counter.className = 'lightbox-counter'
+  counter.textContent = (idx + 1) + ' / ' + lbImgs.length
+
+  lb.appendChild(img)
+  lb.appendChild(closeBtn)
+  lb.appendChild(counter)
+
+  function onKey(e) {
+    if (e.key === 'Escape') { closeLightbox(lb) }
+    else if (e.key === 'ArrowLeft' && idx > 0) { navigate(--idx) }
+    else if (e.key === 'ArrowRight' && idx < lbImgs.length - 1) { navigate(++idx) }
+  }
+
+  function navigate(newIdx) {
+    idx = newIdx
+    var src = lbImgs[idx].src
+    var alt = lbImgs[idx].alt
+    img.style.animation = 'none'
+    img.offsetHeight
+    img.src = src
+    img.alt = alt
+    counter.textContent = (idx + 1) + ' / ' + lbImgs.length
+  }
+
+  lb.onclick = function(e) { if (e.target === lb) closeLightbox(lb) }
+  document.addEventListener('keydown', onKey)
+
+  lb.close = function() {
+    document.removeEventListener('keydown', onKey)
+    lb.remove()
+  }
+
+  document.body.appendChild(lb)
+}
+
+function closeLightbox(lb) {
+  lb.classList.add('hide')
+  setTimeout(function() { lb.close() }, 200)
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Dependencies
+frontend/node_modules/
+frontend/dist/
+backend-py/__pycache__/
+backend-py/*.pyc
+
+# Build artifacts
+backend/gitstat
+backend/web/dist/
+
+# IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Environment
+.env.local

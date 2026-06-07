@@ -1,0 +1,331 @@
+import { reactive, computed } from 'vue'
+
+const messages = {
+  zh: {
+    nav: {
+      dashboard: '仪表盘',
+      analytics: '数据分析',
+      repos: '仓库信息',
+      settings: '设置',
+      github: 'GitHub'
+    },
+    dashboard: {
+      switchDirectory: '切换目录',
+      todayCommits: '今日提交数',
+      todayAdditions: '今日新增行数',
+      todayDeletions: '今日删除行数',
+      activeAuthors: '今日活跃作者',
+      repositoryCount: '仓库总数',
+      weeklyTotal: '本周总提交',
+      repoComparison: '仓库活跃度对比',
+      activeDays: '活跃天数',
+      dailyAvg: '日均提交',
+      repo: '仓库',
+      weeklyTrend: '本周提交趋势',
+      authorRank: '本周作者排行榜',
+      netChange: '净变更',
+      avgCommitSize: '平均提交大小',
+      todayDetails: '今日提交详情',
+      lastCommit: '最后提交',
+      author: '作者',
+      commits: '提交数',
+      changes: '变更',
+      me: '我'
+    },
+    scan: {
+      title: '扫描Git仓库',
+      directoryPath: '目录路径',
+      startScan: '开始扫描',
+      scanning: '扫描中...'
+    },
+    analytics: {
+      title: '数据分析中心',
+      subtitle: '实时监控 · 多维度洞察',
+      timeRange: '时间范围',
+      thisWeek: '本周',
+      lastWeek: '上周',
+      thisMonth: '本月',
+      lastMonth: '上月',
+      thisYear: '本年',
+      customPeriod: '自定义周期',
+      repoFilter: '仓库筛选',
+      selectRepo: '选择仓库',
+      allRepos: '全部仓库',
+      reposSelected: '个仓库',
+      selectAll: '全选',
+      cancelSelectAll: '取消全选',
+      startAnalyze: '开始分析',
+      analyzing: '分析中...',
+      overviewTitle: '统计概览',
+      totalCommits: '总提交数',
+      totalAdditions: '新增行数',
+      totalDeletions: '删除行数',
+      activeAuthors: '活跃作者',
+      daily: '每日',
+      weekly: '每周',
+      monthly: '每月',
+      yearly: '每年',
+      commitTrend: '提交趋势',
+      commitTrendSub: '多用户对比分析',
+      codeChange: '代码变更分布',
+      codeChangeSub: '新增 vs 删除',
+      noData: '暂无数据',
+      additions: '新增',
+      deletions: '删除',
+      developer: '开发者',
+      repoName: '仓库'
+    },
+    calendar: {
+      chartView: '图表视图',
+      calendarView: '日历视图',
+      total: '合计',
+      commitsUnit: '次提交',
+      noDetail: '暂无详细信息'
+    },
+    repo: {
+      empty: '暂无仓库信息，请先在设置页面扫描目录',
+      currentBranch: '当前分支',
+      branchCount: '分支总数',
+      branchList: '分支列表',
+      fileCount: '文件总数',
+      lastCommit: '最后提交',
+      createDate: '创建日期',
+      diskSize: '磁盘占用',
+      creator: '创建人',
+      mainLang: '主要语言',
+      langDistribution: '语言占比',
+      analyzeToSee: '需深度分析后查看',
+      dayUnit: '天',
+      monthUnit: '个月',
+      yearUnit: '年',
+      analyzeTitle: '深度分析代码结构',
+      analyzeDesc: '统计代码总行数、编程语言占比和分支列表',
+      analyzeError: '分析失败，请检查仓库路径',
+      analyzeBtn: '开始深度分析',
+      analyzing: '正在分析中...',
+      analyzeResult: '分析结果',
+      lang: '语言',
+      files: '文件数',
+      lines: '代码行',
+      percent: '占比',
+      total: '总计',
+      totalRepos: '仓库总数',
+      totalBranches: '总分支',
+      totalFiles: '总文件',
+      latestUpdate: '最近更新',
+      name: '仓库名',
+      remoteUrl: '远程地址',
+      createTime: '创建时间',
+      recentCommits: '最近提交',
+      contributors: '贡献者',
+      commits: '提交数',
+      additions: '新增',
+      deletions: '删除',
+      author: '作者',
+      hash: '哈希',
+      message: '提交消息',
+      time: '时间',
+      changes: '变更',
+      backToList: '← 返回列表',
+      loading: '加载中...',
+      detail: '详情',
+      statsTitle: '加载统计信息',
+      statsDesc: '获取提交统计、磁盘占用、贡献者排行等数据（首次加载可能需要数秒）',
+      statsBtn: '加载统计信息',
+      statsLoading: '加载中...'
+    },
+    settings: {
+      title: '设置',
+      scanConfig: '扫描配置',
+      directoryPath: '目录路径',
+      pathPlaceholder: '/path/to/repos',
+      startScan: '开始扫描',
+      scanning: '扫描中...',
+      scanSuccess: '扫描完成',
+      dataManagement: '数据管理',
+      exportData: '导出数据 (JSON)',
+      about: '关于',
+      platformName: 'Git提交统计平台'
+    }
+  },
+  en: {
+    nav: {
+      dashboard: 'Dashboard',
+      analytics: 'Analytics',
+      repos: 'Repositories',
+      settings: 'Settings',
+      github: 'GitHub'
+    },
+    dashboard: {
+      switchDirectory: 'Switch Directory',
+      todayCommits: "Today's Commits",
+      todayAdditions: "Today's Additions",
+      todayDeletions: "Today's Deletions",
+      activeAuthors: "Today's Active Authors",
+      repositoryCount: 'Total Repos',
+      weeklyTotal: 'Weekly Total',
+      repoComparison: 'Repo Activity Comparison',
+      activeDays: 'Active Days',
+      dailyAvg: 'Daily Avg',
+      repo: 'Repository',
+      weeklyTrend: 'Weekly Trend',
+      authorRank: "This Week's Leaderboard",
+      netChange: 'Net Change',
+      avgCommitSize: 'Avg Commit Size',
+      todayDetails: "Today's Commit Details",
+      lastCommit: 'Last Commit',
+      author: 'Author',
+      commits: 'Commits',
+      changes: 'Changes',
+      me: 'ME'
+    },
+    scan: {
+      title: 'Scan Git Repositories',
+      directoryPath: 'Directory Path',
+      startScan: 'Start Scan',
+      scanning: 'Scanning...'
+    },
+    analytics: {
+      title: 'Data Analytics Center',
+      subtitle: 'Real-time Monitoring · Multi-dimensional Insights',
+      timeRange: 'Time Range',
+      thisWeek: 'This Week',
+      lastWeek: 'Last Week',
+      thisMonth: 'This Month',
+      lastMonth: 'Last Month',
+      thisYear: 'This Year',
+      customPeriod: 'Custom Period',
+      repoFilter: 'Repository Filter',
+      selectRepo: 'Select Repositories',
+      allRepos: 'All Repositories',
+      reposSelected: 'repositories selected',
+      selectAll: 'Select All',
+      cancelSelectAll: 'Deselect All',
+      startAnalyze: 'Start Analysis',
+      analyzing: 'Analyzing...',
+      overviewTitle: 'Overview',
+      totalCommits: 'Total Commits',
+      totalAdditions: 'Additions',
+      totalDeletions: 'Deletions',
+      activeAuthors: 'Active Authors',
+      daily: 'Daily ',
+      weekly: 'Weekly ',
+      monthly: 'Monthly ',
+      yearly: 'Yearly ',
+      commitTrend: 'Commit Trend',
+      commitTrendSub: 'Multi-user Comparison',
+      codeChange: 'Code Change Distribution',
+      codeChangeSub: 'Additions vs Deletions',
+      noData: 'No Data',
+      additions: 'Additions',
+      deletions: 'Deletions',
+      developer: 'Developer',
+      repoName: 'Repository'
+    },
+    calendar: {
+      chartView: 'Charts',
+      calendarView: 'Calendar',
+      total: 'Total',
+      commitsUnit: 'commits',
+      noDetail: 'No details available'
+    },
+    repo: {
+      empty: 'No repo info available. Please scan a directory in Settings first.',
+      currentBranch: 'Current Branch',
+      branchCount: 'Branches',
+      branchList: 'Branches',
+      fileCount: 'Files',
+      lastCommit: 'Last Commit',
+      createDate: 'Created',
+      diskSize: 'Disk Size',
+      creator: 'Creator',
+      mainLang: 'Main Language',
+      langDistribution: 'Languages',
+      analyzeToSee: 'Run analysis to view',
+      dayUnit: 'd',
+      monthUnit: 'mo',
+      yearUnit: 'y',
+      analyzeTitle: 'Deep Analyze Code Structure',
+      analyzeDesc: 'Count total lines of code, language breakdown and branch list',
+      analyzeError: 'Analysis failed, check repo path',
+      analyzeBtn: 'Start Deep Analysis',
+      analyzing: 'Analyzing...',
+      analyzeResult: 'Analysis Result',
+      lang: 'Language',
+      files: 'Files',
+      lines: 'Lines',
+      percent: '%',
+      total: 'Total',
+      totalRepos: 'Total Repos',
+      totalBranches: 'Total Branches',
+      totalFiles: 'Total Files',
+      latestUpdate: 'Latest Update',
+      name: 'Repository',
+      remoteUrl: 'Remote URL',
+      createTime: 'Created',
+      recentCommits: 'Recent Commits',
+      contributors: 'Contributors',
+      commits: 'Commits',
+      additions: 'Additions',
+      deletions: 'Deletions',
+      author: 'Author',
+      hash: 'Hash',
+      message: 'Message',
+      time: 'Time',
+      changes: 'Changes',
+      backToList: '← Back to List',
+      loading: 'Loading...',
+      detail: 'Detail',
+      statsTitle: 'Load Statistics',
+      statsDesc: 'Fetch commit stats, disk usage, contributor rankings (first load may take seconds)',
+      statsBtn: 'Load Statistics',
+      statsLoading: 'Loading...'
+    },
+    settings: {
+      title: 'Settings',
+      scanConfig: 'Scan Configuration',
+      directoryPath: 'Directory Path',
+      pathPlaceholder: '/path/to/repos',
+      startScan: 'Start Scan',
+      scanning: 'Scanning...',
+      scanSuccess: 'Scan completed',
+      dataManagement: 'Data Management',
+      exportData: 'Export Data (JSON)',
+      about: 'About',
+      platformName: 'Git Commit Statistics Platform'
+    }
+  }
+}
+
+const state = reactive({
+  locale: getBrowserLocale()
+})
+
+function getBrowserLocale() {
+  const saved = localStorage.getItem('locale')
+  if (saved && (saved === 'zh' || saved === 'en')) return saved
+  const lang = navigator.language || navigator.userLanguage
+  return lang.startsWith('zh') ? 'zh' : 'en'
+}
+
+export function useI18n() {
+  const t = (key) => {
+    const keys = key.split('.')
+    let value = messages[state.locale]
+    for (const k of keys) {
+      value = value?.[k]
+    }
+    return value || key
+  }
+
+  const setLocale = (locale) => {
+    state.locale = locale
+    localStorage.setItem('locale', locale)
+  }
+
+  return {
+    t,
+    locale: computed(() => state.locale),
+    setLocale
+  }
+}
