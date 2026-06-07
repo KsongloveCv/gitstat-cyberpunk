@@ -1,5 +1,8 @@
 <template>
   <div class="dashboard">
+    <!-- 天气卡片 -->
+    <WeatherCard />
+
     <!-- 今日统计概览 -->
       <div v-if="sectionLoading.stats" class="stats-grid">
         <div v-for="i in 6" :key="i" class="stat-card-ph">
@@ -46,6 +49,9 @@
           color="#f472b6"
         />
       </div>
+      
+      <!-- 连续贡献天数 -->
+      <StreakCard />
       
       <!-- 本周趋势 + 作者排行榜 -->
       <div class="insight-grid">
@@ -211,8 +217,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from '../i18n'
-import { state, fetchOverviewStats, fetchRepoDailyTrend, fetchAuthorRank, loadDashboardS2 } from '../stores/data'
+import { state, fetchOverviewStats, fetchRepoDailyTrend, fetchAuthorRank, loadDashboardS2, fetchWeather } from '../stores/data'
 import StatCard from '../components/StatCard.vue'
+import StreakCard from '../components/StreakCard.vue'
+import WeatherCard from '../components/WeatherCard.vue'
 import echarts from '../utils/echarts'
 import { CHART_COLORS } from '../utils/constants'
 
@@ -334,6 +342,20 @@ function handleResize() {
 }
 
 onMounted(async () => {
+  // Load weather data with geolocation
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        timeout: 5000,
+        maximumAge: 300000
+      })
+    })
+    fetchWeather(pos.coords.latitude, pos.coords.longitude)
+  } catch {
+    // Fallback to Shanghai coordinates
+    fetchWeather(31.23, 121.47)
+  }
+
   await Promise.all([
     fetchOverviewStats().then(() => { sectionLoading.stats = false }),
     fetchRepoDailyTrend().then(() => { sectionLoading.trend = false }),

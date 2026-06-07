@@ -268,3 +268,45 @@ export async function getVersion() {
   const data = await response.json()
   return data.version
 }
+
+export async function getStreakStats(repos = []) {
+  const params = new URLSearchParams()
+
+  if (repos.length > 0 && !repos.includes('all')) {
+    repos.forEach(repo => params.append('repo', repo))
+  }
+
+  const url = `${API_BASE}/stats/streak?${params.toString()}`
+  const response = await fetch(url)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch streak stats')
+  }
+
+  const data = await response.json()
+  return data.data
+}
+
+export async function getWeatherCurrent(lat, lon) {
+  const params = new URLSearchParams({ lat, lon })
+  const response = await fetch(`${API_BASE}/weather/current?${params}`)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch current weather')
+  }
+
+  const data = await response.json()
+  return data.data
+}
+
+export async function getWeatherForecast(lat, lon, days = 7) {
+  const params = new URLSearchParams({ lat, lon, days })
+  const response = await fetch(`${API_BASE}/weather/forecast?${params}`)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch weather forecast')
+  }
+
+  const data = await response.json()
+  return data.data
+}

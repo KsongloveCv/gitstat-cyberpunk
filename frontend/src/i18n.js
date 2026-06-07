@@ -146,6 +146,42 @@ const messages = {
       exportData: '导出数据 (JSON)',
       about: '关于',
       platformName: 'Git提交统计平台'
+    },
+    streak: {
+      title: '连续贡献',
+      calculating: '计算中...',
+      noData: '暂无贡献数据',
+      currentStreak: '当前连续',
+      longestStreak: '最长连续',
+      weeklyActive: '本周活跃',
+      days: '天',
+      last30Days: '最近30天',
+      commits: '次提交',
+      keepGoing: '距离最长记录'
+    },
+    weather: {
+      current: '当前天气',
+      forecast: '近一周天气',
+      humidity: '湿度',
+      wind: '风速',
+      apparentTemp: '体感温度',
+      feelsLike: '体感',
+      location: '定位地区',
+      noLocation: '定位失败，使用默认地区',
+      loading: '加载天气数据...',
+      unavailable: '天气数据暂不可用',
+      daysOfWeek: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'],
+      today: '今天',
+      maxTemp: '最高',
+      minTemp: '最低',
+      precipitation: '降水量',
+      sunrise: '日出',
+      sunset: '日落',
+      windMax: '最大风速',
+      unitC: '°C',
+      unitKmh: 'km/h',
+      unitPercent: '%',
+      unitMm: 'mm'
     }
   },
   en: {
@@ -293,6 +329,42 @@ const messages = {
       exportData: 'Export Data (JSON)',
       about: 'About',
       platformName: 'Git Commit Statistics Platform'
+    },
+    streak: {
+      title: 'Commit Streak',
+      calculating: 'Calculating...',
+      noData: 'No contribution data',
+      currentStreak: 'Current Streak',
+      longestStreak: 'Longest Streak',
+      weeklyActive: 'Weekly Active',
+      days: 'days',
+      last30Days: 'Last 30 Days',
+      commits: 'commits',
+      keepGoing: 'Progress to longest'
+    },
+    weather: {
+      current: 'Current Weather',
+      forecast: '7-Day Forecast',
+      humidity: 'Humidity',
+      wind: 'Wind Speed',
+      apparentTemp: 'Apparent Temperature',
+      feelsLike: 'Feels Like',
+      location: 'Location',
+      noLocation: 'Location unavailable, using default',
+      loading: 'Loading weather...',
+      unavailable: 'Weather data unavailable',
+      daysOfWeek: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      today: 'Today',
+      maxTemp: 'Max',
+      minTemp: 'Min',
+      precipitation: 'Precipitation',
+      sunrise: 'Sunrise',
+      sunset: 'Sunset',
+      windMax: 'Max Wind',
+      unitC: '°C',
+      unitKmh: 'km/h',
+      unitPercent: '%',
+      unitMm: 'mm'
     }
   }
 }
