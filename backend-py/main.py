@@ -61,6 +61,7 @@ from brotli_asgi import BrotliMiddleware
 import uvicorn
 
 # Import from refactored modules
+import database
 from git_utils import (
     git_exec, get_git_version, parse_git_log, run_git_log,
     git_log_cache, get_repo_meta, get_remote_url, get_repo_size, EXT_LANG_MAP
@@ -282,6 +283,11 @@ class Store:
                     dates = [c["date"] for c in commits]
                     cache["earliestDate"] = min(dates)
                     cache["latestDate"] = max(dates)
+                # Persist to database
+                try:
+                    database.save_commits(path, commits)
+                except Exception as e:
+                    log.warning("Failed to save commits to DB: %s", e)
 
     def merge_commits(self, path: str, new_commits: list[dict]) -> bool:
         """增量合并去重，检查上限。"""
@@ -310,6 +316,11 @@ class Store:
             cache = self.repos.get(path)
             if cache:
                 cache.update(kwargs)
+                # Persist key metadata to database
+                try:
+                    database.save_repo_meta(cache)
+                except Exception as e:
+                    log.warning("Failed to save repo meta to DB: %s", e)
 
 
 store = Store()
@@ -2180,6 +2191,9 @@ def open_browser(url: str):
 if __name__ == "__main__":
     import argparse
 
+    # Initialize SQLite database
+    database.init_db()
+
     parser = argparse.ArgumentParser(
         description="GitStat Netrunner Edition — Python Backend"
     )
@@ -2191,11 +2205,43 @@ if __name__ == "__main__":
                         help="不自动打开浏览器")
     args = parser.parse_args()
 
-    # 注册仓库
+    # Restore state from database if available, otherwise scan fresh
+    saved_path = database.get_scan_path()
+    if saved_path and not args.scan_path:
+        args.scan_path = saved_path
+
+    database.save_scan_path(args.scan_path)
     store.set_scan_path(args.scan_path)
     repos = discover_repos(args.scan_path)
     store.register_repos(repos)
-    print(f"Registered {len(repos)} repos from {args.scan_path}")
+
+    # Restore cached repos from DB
+    db_repos = database.load_repos()
+    for db_repo in db_repos:
+        if db_repo["path"] not in store.repos:
+            store.repos[db_repo["path"]] = {
+                "path": db_repo["path"], "name": db_repo["name"],
+                "userEmail": db_repo["userEmail"],
+                "currentBranch": db_repo["currentBranch"],
+                "lastCommitTime": db_repo["lastCommitTime"],
+                "initialized": True, "commits": [],
+                "earliestDate": None, "latestDate": None,
+                "branchCount": db_repo["branchCount"],
+                "fileCount": db_repo["fileCount"],
+                "remoteUrl": db_repo["remoteUrl"],
+                "repoSize": db_repo["repoSize"],
+                "analyzed": db_repo["analyzed"],
+                "branches": db_repo["branches"],
+                "totalLines": db_repo["totalLines"],
+                "languages": db_repo["languages"],
+            }
+            # Hydrate commits from DB
+            commits = database.load_commits(db_repo["path"])
+            if commits:
+                store.set_repo_commits(db_repo["path"], commits)
+
+    print(f"Registered {len(repos)} repos from {args.scan_path} "
+          f"(restored {len(db_repos)} from database)")
 
     url = f"http://localhost:{args.port}"
     print(f"GitStat Web Server (Python)")
