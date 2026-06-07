@@ -20,10 +20,10 @@ import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import echarts from '../utils/echarts'
 
 const props = defineProps({
-  title: String,
-  subtitle: String,
-  option: Object,
-  loading: Boolean
+  title: { type: String, required: true },
+  subtitle: { type: String, default: '' },
+  option: { type: Object, default: null },
+  loading: { type: Boolean, default: false }
 })
 
 const chartRef = ref(null)

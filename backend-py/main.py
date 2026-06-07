@@ -70,11 +70,16 @@ FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 # Gitee API
 GITEE_API_BASE = "https://gitee.com/api/v5"
 GITEE_CACHE_DIR = Path.home() / ".gitstat-gitee-cache"
+GITEE_ACCESS_TOKEN = os.environ.get("GITEE_TOKEN", "")  # 可选：设置环境变量提高限速
 
 
 def gitee_api(path: str) -> dict:
-    """调用 Gitee Open API v5，返回 JSON。"""
+    """调用 Gitee Open API v5，返回 JSON。支持可选的 GITEE_TOKEN 认证。"""
     url = f"{GITEE_API_BASE}{path}"
+    if "?" in path:
+        url += f"&access_token={GITEE_ACCESS_TOKEN}" if GITEE_ACCESS_TOKEN else ""
+    else:
+        url += f"?access_token={GITEE_ACCESS_TOKEN}" if GITEE_ACCESS_TOKEN else ""
     try:
         req = urllib.request.Request(url, headers={
             "User-Agent": "GitStat/2.0",
