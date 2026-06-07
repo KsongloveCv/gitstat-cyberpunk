@@ -34,6 +34,69 @@ VERSION = "2.0.0-py"
 MAX_COMMITS_PER_REPO = 5000
 FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 
+# Gitee API
+GITEE_API_BASE = "https://gitee.com/api/v5"
+GITEE_CACHE_DIR = Path.home() / ".gitstat-gitee-cache"
+
+
+def gitee_api(path: str) -> dict:
+    """调用 Gitee Open API v5，返回 JSON。"""
+    url = f"{GITEE_API_BASE}{path}"
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "GitStat/2.0",
+            "Accept": "application/json",
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        raise HTTPException(503, f"Gitee API unavailable: {e}")
+
+
+def gitee_list_repos(owner: str, page: int = 1, per_page: int = 30) -> list[dict]:
+    """获取某用户/组织的公开仓库列表。"""
+    raw = gitee_api(f"/users/{owner}/repos?page={page}&per_page={per_page}&sort=updated")
+    if not isinstance(raw, list):
+        return []
+    return [{
+        "id": r.get("id"),
+        "name": r.get("name"),
+        "fullName": r.get("full_name"),
+        "description": r.get("description", ""),
+        "htmlUrl": r.get("html_url"),
+        "sshUrl": r.get("ssh_url"),
+        "cloneUrl": r.get("clone_url"),
+        "stars": r.get("stargazers_count", 0),
+        "forks": r.get("forks_count", 0),
+        "language": r.get("language", ""),
+        "updatedAt": r.get("updated_at", ""),
+        "pushedAt": r.get("pushed_at", ""),
+        "createdAt": r.get("created_at", ""),
+    } for r in raw]
+
+
+def gitee_get_repo(owner: str, repo: str) -> dict:
+    """获取单个仓库信息。"""
+    r = gitee_api(f"/repos/{owner}/{repo}")
+    return {
+        "id": r.get("id"),
+        "name": r.get("name"),
+        "fullName": r.get("full_name"),
+        "description": r.get("description", ""),
+        "htmlUrl": r.get("html_url"),
+        "sshUrl": r.get("ssh_url"),
+        "cloneUrl": r.get("clone_url"),
+        "stars": r.get("stargazers_count", 0),
+        "forks": r.get("forks_count", 0),
+        "language": r.get("language", ""),
+        "updatedAt": r.get("updated_at", ""),
+        "pushedAt": r.get("pushed_at", ""),
+        "createdAt": r.get("created_at", ""),
+        "commitsCount": r.get("commits_count", 0),
+        "watchers": r.get("watchers_count", 0),
+        "defaultBranch": r.get("default_branch", "master"),
+    }
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  GIT EXEC — 调用 git 命令
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1155,6 +1218,42 @@ def api_export():
     )
 
 
+# ---- 提交详情列表 ----
+
+@app.get("/api/stats/commit-list")
+def api_commit_list(
+    repo: list[str] = Query(default=[]),
+    startDate: str = "",
+    endDate: str = "",
+    range: str = "",
+    email: str = "",
+    limit: int = Query(default=50),
+):
+    """返回指定时间范围内的提交详情列表（按时间倒序）。"""
+    start, end = parse_time_params(startDate, endDate, range, "today")
+    ensure_data_loaded(repo, start)
+    repos = _load_repos(repo)
+    user = _resolve_user_email(repos, email)
+
+    all_commits = []
+    for r in repos:
+        for c in _filter_commits(r["commits"], user, start, end):
+            all_commits.append({
+                "hash": c["hash"],
+                "author": c["author"],
+                "email": c["email"],
+                "date": c["date"].strftime("%Y-%m-%d %H:%M:%S"),
+                "message": c["message"],
+                "additions": c["additions"],
+                "deletions": c["deletions"],
+                "repoName": r["name"],
+                "repoPath": r["path"],
+            })
+
+    all_commits.sort(key=lambda c: c["date"], reverse=True)
+    return all_commits[:limit]
+
+
 # ---- 版本 + 健康检查 ----
 
 @app.get("/api/version")
@@ -1459,7 +1558,7 @@ def _clean_model_name(raw: str) -> str:
     return m
 
 
-def _aggregate_token_stats(records: list[dict], time_range: str, model_filter: str | None = None) -> dict:
+def _aggregate_token_stats(records: list[dict], time_range: str, model_filter: Optional[str] = None) -> dict:
     """聚合 token 统计数据。"""
     today = date.today()
     
@@ -1556,7 +1655,7 @@ def _aggregate_token_stats(records: list[dict], time_range: str, model_filter: s
     }
 
 
-def _generate_demo_token_data(today: date, cutoff: date, model_filter: str | None = None) -> list[dict]:
+def _generate_demo_token_data(today: date, cutoff: date, model_filter: Optional[str] = None) -> list[dict]:
     """生成演示 token 数据（用于无真实日志时的展示）。"""
     import random
     random.seed(42)
@@ -1612,7 +1711,7 @@ async def token_stats(
 #  STREAK — 连续贡献天数统计
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def _calc_streak(repo_list: list, repos_filter: list[str] | None = None) -> dict:
+def _calc_streak(repo_list: list, repos_filter: Optional[list] = None) -> dict:
     """
     计算连续贡献天数（current streak / longest streak / weekly active / last 30 days）。
     基于 daily 统计数据，从今天往前回溯。
