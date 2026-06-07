@@ -254,6 +254,55 @@ class Store:
 
 store = Store()
 
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  GITEE CLONE — 从 Gitee 克隆仓库到本地缓存
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def clone_gitee_repo(clone_url: str, owner: str, repo: str) -> dict:
+    """Clone 一个 Gitee 仓库到本地缓存目录，返回路径信息。"""
+    GITEE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    target_dir = GITEE_CACHE_DIR / f"{owner}_{repo}"
+
+    if target_dir.exists():
+        # 已存在则 pull
+        try:
+            subprocess.run(
+                ["git", "-C", str(target_dir), "pull", "--ff-only"],
+                capture_output=True, text=True, timeout=60
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+    else:
+        # Clone
+        try:
+            result = subprocess.run(
+                ["git", "clone", "--depth", "100", clone_url, str(target_dir)],
+                capture_output=True, text=True, timeout=120
+            )
+        except subprocess.TimeoutExpired:
+            raise HTTPException(504, "Clone timed out")
+        except OSError as e:
+            raise HTTPException(500, f"Clone failed: {e}")
+
+        if result.returncode != 0:
+            import shutil
+            shutil.rmtree(target_dir, ignore_errors=True)
+            raise HTTPException(400, f"Clone failed: {result.stderr}")
+
+    return {
+        "path": str(target_dir),
+        "name": repo,
+        "owner": owner,
+        "cloneUrl": clone_url,
+    }
+
+
+def gitee_load_commits(repo_path: str) -> list[dict]:
+    """在已 clone 的 Gitee 仓库上运行 git log 解析。"""
+    return run_git_log(repo_path)
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  GIT LOG PARSER
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
