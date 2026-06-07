@@ -37,6 +37,10 @@
           <span class="nav-icon">◉</span>
           {{ t('nav.analytics') }}
         </a>
+        <a @click="setView('tokens')" :class="{ active: currentView === 'tokens' }">
+          <span class="nav-icon">⟐</span>
+          {{ t('nav.tokens') }}
+        </a>
         <a @click="setView('repos')" :class="{ active: currentView === 'repos' }">
           <span class="nav-icon">▤</span>
           {{ t('nav.repos') }}
@@ -87,10 +91,11 @@ import BootSequence from './components/BootSequence.vue'
 
 const Dashboard = defineAsyncComponent(() => import('./views/Dashboard.vue'))
 const Analytics = defineAsyncComponent(() => import('./views/Analytics.vue'))
+const TokenAnalytics = defineAsyncComponent(() => import('./views/TokenAnalytics.vue'))
 const RepoSection = defineAsyncComponent(() => import('./views/RepoSection.vue'))
 const Settings = defineAsyncComponent(() => import('./views/Settings.vue'))
 
-const componentMap = { dashboard: Dashboard, analytics: Analytics, repos: RepoSection, settings: Settings }
+const componentMap = { dashboard: Dashboard, analytics: Analytics, tokens: TokenAnalytics, repos: RepoSection, settings: Settings }
 
 const { t, locale, setLocale } = useI18n()
 const currentView = ref(localStorage.getItem('currentView') || 'dashboard')

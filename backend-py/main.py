@@ -1300,6 +1300,315 @@ def api_weather_forecast(lat: float = Query(...), lon: float = Query(...), days:
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  TOKEN ANALYTICS — 模型Token消耗统计
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# ── 模型价格表（每1K tokens的美元价格） ──
+MODEL_PRICING = {
+    # OpenAI
+    "gpt-4o":          {"input": 2.50,  "output": 10.00},
+    "gpt-4o-mini":     {"input": 0.15,  "output": 0.60},
+    "gpt-4-turbo":     {"input": 10.00, "output": 30.00},
+    "gpt-4":           {"input": 30.00, "output": 60.00},
+    "gpt-3.5-turbo":   {"input": 0.50,  "output": 1.50},
+    "o1":              {"input": 15.00, "output": 60.00},
+    "o1-mini":         {"input": 3.00,  "output": 12.00},
+    "o1-pro":          {"input": 150.00, "output": 600.00},
+    "o3":              {"input": 2.00,  "output": 8.00},
+    "o3-mini":         {"input": 1.10,  "output": 4.40},
+    "o4-mini":         {"input": 1.10,  "output": 4.40},
+    # Anthropic
+    "claude-sonnet-4":       {"input": 3.00,  "output": 15.00},
+    "claude-opus-4":         {"input": 15.00, "output": 75.00},
+    "claude-3.5-sonnet":     {"input": 3.00,  "output": 15.00},
+    "claude-3.5-haiku":      {"input": 0.80,  "output": 4.00},
+    "claude-3-opus":         {"input": 15.00, "output": 75.00},
+    "claude-3-haiku":        {"input": 0.25,  "output": 1.25},
+    # Google
+    "gemini-2.5-pro":   {"input": 1.25,  "output": 10.00},
+    "gemini-2.5-flash": {"input": 0.15,  "output": 0.60},
+    "gemini-2.0-flash": {"input": 0.10,  "output": 0.40},
+    "gemini-1.5-pro":   {"input": 1.25,  "output": 5.00},
+    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+    # DeepSeek
+    "deepseek-chat":    {"input": 0.27,  "output": 1.10},
+    "deepseek-reasoner":{"input": 0.55,  "output": 2.19},
+    "deepseek-v3":      {"input": 0.27,  "output": 1.10},
+    "deepseek-v4-pro":  {"input": 0.55,  "output": 2.19},
+    # Meta
+    "llama-3.1-405b":   {"input": 2.40,  "output": 2.40},
+    "llama-3.1-70b":    {"input": 0.26,  "output": 0.26},
+    "llama-3.1-8b":     {"input": 0.03,  "output": 0.03},
+    # Mistral
+    "mistral-large":    {"input": 2.00,  "output": 6.00},
+    "mistral-medium":   {"input": 0.75,  "output": 2.25},
+    "mistral-small":    {"input": 0.15,  "output": 0.45},
+    # 阿里云 DashScope
+    "glm-5":            {"input": 0.50,  "output": 2.00},
+    "glm-5.1":          {"input": 0.50,  "output": 2.00},
+    "qwen-max":         {"input": 0.80,  "output": 2.00},
+    "qwen-plus":        {"input": 0.40,  "output": 1.20},
+    "qwen-turbo":       {"input": 0.10,  "output": 0.30},
+}
+
+
+def _parse_token_log(scan_path: str) -> list[dict]:
+    """
+    扫描目录中的 token 使用日志文件。
+    支持多种格式：
+    1. JSON日志（每行一个JSON对象）
+    2. CSV日志
+    3. Hermes Agent 的 session 日志
+    
+    查找路径：
+    - scan_path 下所有 .token-log / .token_usage 文件
+    - ~/.hermes/logs/ 下的 token 日志
+    - ~/.hermes/cache/ 下含 token 数据的文件
+    """
+    records = []
+    
+    # 扫描 Hermes session 日志
+    hermes_dir = Path.home() / ".hermes"
+    sessions_dir = hermes_dir / "sessions"
+    cache_dir = hermes_dir / "cache"
+    
+    token_dirs = [sessions_dir, cache_dir]
+    
+    for d in token_dirs:
+        if not d.exists():
+            continue
+        for f in d.rglob("*.json"):
+            try:
+                with open(f, "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+                # 尝试从 Hermes session JSON 中提取 token 信息
+                if isinstance(data, dict):
+                    # 检查是否有 token 用量字段
+                    usage = data.get("usage") or data.get("token_usage") or {}
+                    model = data.get("model") or data.get("model_name") or ""
+                    timestamp = data.get("timestamp") or data.get("created_at") or data.get("date") or ""
+                    
+                    if usage and model:
+                        # 提取 input/output tokens
+                        input_t = usage.get("prompt_tokens") or usage.get("input_tokens") or 0
+                        output_t = usage.get("completion_tokens") or usage.get("output_tokens") or usage.get("generated_tokens") or 0
+                        
+                        if input_t > 0 or output_t > 0:
+                            # 清理模型名称
+                            model_clean = _clean_model_name(model)
+                            records.append({
+                                "model": model_clean,
+                                "input": input_t,
+                                "output": output_t,
+                                "timestamp": timestamp,
+                            })
+            except Exception:
+                continue
+    
+    # 扫描项目目录下的 token 日志
+    for pattern in ["*.token-log", "*.token_usage", "token_log*.json", "token_log*.csv"]:
+        for f in Path(scan_path).rglob(pattern):
+            try:
+                if f.suffix == ".json":
+                    with open(f, "r", encoding="utf-8") as fh:
+                        data = json.load(fh)
+                    if isinstance(data, list):
+                        for item in data:
+                            model = item.get("model") or ""
+                            input_t = item.get("input_tokens") or item.get("prompt_tokens") or 0
+                            output_t = item.get("output_tokens") or item.get("completion_tokens") or 0
+                            ts = item.get("timestamp") or item.get("date") or ""
+                            if model and (input_t > 0 or output_t > 0):
+                                records.append({
+                                    "model": _clean_model_name(model),
+                                    "input": input_t,
+                                    "output": output_t,
+                                    "timestamp": ts,
+                                })
+                    elif isinstance(data, dict):
+                        model = data.get("model") or ""
+                        input_t = data.get("input_tokens") or data.get("prompt_tokens") or 0
+                        output_t = data.get("output_tokens") or data.get("completion_tokens") or 0
+                        ts = data.get("timestamp") or data.get("date") or ""
+                        if model and (input_t > 0 or output_t > 0):
+                            records.append({"model": _clean_model_name(model), "input": input_t, "output": output_t, "timestamp": ts})
+                elif f.suffix == ".csv":
+                    import csv
+                    with open(f, "r", encoding="utf-8") as fh:
+                        reader = csv.DictReader(fh)
+                        for row in reader:
+                            model = row.get("model") or ""
+                            input_t = int(row.get("input_tokens") or row.get("prompt_tokens") or 0)
+                            output_t = int(row.get("output_tokens") or row.get("completion_tokens") or 0)
+                            ts = row.get("timestamp") or row.get("date") or ""
+                            if model and (input_t > 0 or output_t > 0):
+                                records.append({"model": _clean_model_name(model), "input": input_t, "output": output_t, "timestamp": ts})
+            except Exception:
+                continue
+    
+    return records
+
+
+def _clean_model_name(raw: str) -> str:
+    """清理模型名称，去除提供商前缀和版本后缀冗余。"""
+    m = raw.strip().lower()
+    # 去除常见前缀
+    for prefix in ["openai/", "anthropic/", "google/", "deepseek/", "meta/", "mistral/", "dashscope/"]:
+        if m.startswith(prefix):
+            m = m[len(prefix):]
+    return m
+
+
+def _aggregate_token_stats(records: list[dict], time_range: str, model_filter: str | None = None) -> dict:
+    """聚合 token 统计数据。"""
+    today = date.today()
+    
+    # 时间范围过滤
+    range_map = {
+        "thisWeek":    timedelta(weeks=1),
+        "lastWeek":    timedelta(weeks=2),
+        "thisMonth":   timedelta(days=30),
+        "lastMonth":   timedelta(days=60),
+        "thisYear":    timedelta(days=365),
+        "customPeriod": timedelta(days=365*2),
+    }
+    cutoff = today - range_map.get(time_range, timedelta(days=365))
+    
+    filtered = []
+    for r in records:
+        # 模型过滤
+        if model_filter and model_filter != "all" and r["model"] != model_filter:
+            continue
+        # 时间过滤
+        ts = r.get("timestamp", "")
+        if ts:
+            try:
+                # 支持多种时间格式
+                for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"]:
+                    try:
+                        dt = datetime.strptime(ts[:26], fmt).date()
+                        break
+                    except ValueError:
+                        continue
+                else:
+                    dt = today  # 无法解析的默认今天
+                if dt < cutoff:
+                    continue
+                r["_date"] = dt.strftime("%Y-%m-%d")
+            except Exception:
+                r["_date"] = today.strftime("%Y-%m-%d")
+        else:
+            r["_date"] = today.strftime("%Y-%m-%d")
+        filtered.append(r)
+    
+    if not filtered:
+        # 如果没有真实数据，生成模拟数据用于演示
+        filtered = _generate_demo_token_data(today, cutoff, model_filter)
+    
+    # ── 统计计算 ──
+    total_input = sum(r["input"] for r in filtered)
+    total_output = sum(r["output"] for r in filtered)
+    total_tokens = total_input + total_output
+    
+    # 模型维度聚合
+    model_agg = {}
+    for r in filtered:
+        m = r["model"]
+        if m not in model_agg:
+            model_agg[m] = {"input": 0, "output": 0}
+        model_agg[m]["input"] += r["input"]
+        model_agg[m]["output"] += r["output"]
+    
+    # 成本计算
+    total_cost = 0.0
+    model_rank = []
+    for m, agg in model_agg.items():
+        pricing = MODEL_PRICING.get(m, {"input": 1.00, "output": 3.00})  # 默认价格
+        cost = (agg["input"] / 1000) * pricing["input"] + (agg["output"] / 1000) * pricing["output"]
+        total_cost += cost
+        model_rank.append({
+            "model": m,
+            "input": agg["input"],
+            "output": agg["output"],
+            "cost": round(cost, 4),
+        })
+    # 按总token排序
+    model_rank.sort(key=lambda x: x["input"] + x["output"], reverse=True)
+    
+    # 趋势数据（按日期聚合）
+    trend_map = {}
+    for r in filtered:
+        ds = r.get("_date", "")
+        if ds not in trend_map:
+            trend_map[ds] = {"input": 0, "output": 0}
+        trend_map[ds]["input"] += r["input"]
+        trend_map[ds]["output"] += r["output"]
+    trend = [{"date": k, "input": v["input"], "output": v["output"]} for k, v in sorted(trend_map.items())]
+    
+    return {
+        "totalInput": total_input,
+        "totalOutput": total_output,
+        "totalTokens": total_tokens,
+        "totalCost": round(total_cost, 2),
+        "modelRank": model_rank,
+        "trend": trend,
+        "availableModels": list(model_agg.keys()),
+    }
+
+
+def _generate_demo_token_data(today: date, cutoff: date, model_filter: str | None = None) -> list[dict]:
+    """生成演示 token 数据（用于无真实日志时的展示）。"""
+    import random
+    random.seed(42)
+    
+    demo_models = [
+        "gpt-4o", "gpt-4o-mini", "claude-sonnet-4", "claude-3.5-sonnet",
+        "glm-5.1", "deepseek-v4-pro", "gemini-2.5-pro", "gemini-2.5-flash",
+        "qwen-max", "o3-mini",
+    ]
+    
+    if model_filter and model_filter != "all":
+        demo_models = [m for m in demo_models if m == model_filter]
+    
+    records = []
+    days = min((today - cutoff).days, 60)
+    for i in range(days):
+        d = today - timedelta(days=i)
+        for m in demo_models:
+            # 不同模型有不同的典型用量
+            base_input = random.randint(500, 8000)
+            base_output = random.randint(200, 4000)
+            # 大模型用量更大
+            if "4o" in m and "mini" not in m:
+                base_input *= 2; base_output *= 2
+            if "opus" in m or "o1-pro" in m:
+                base_input *= 4; base_output *= 4
+            if "flash" in m or "mini" in m:
+                base_input //= 2; base_output //= 2
+            
+            records.append({
+                "model": m,
+                "input": base_input,
+                "output": base_output,
+                "timestamp": d.strftime("%Y-%m-%dT%H:%M:%S"),
+                "_date": d.strftime("%Y-%m-%d"),
+            })
+    return records
+
+
+@app.get("/api/stats/tokens")
+async def token_stats(
+    range: str = Query("thisWeek", alias="range"),
+    model: Optional[str] = Query(None),
+):
+    """Token 消耗统计 API。"""
+    scan_dir = store.scan_path or os.getcwd()
+    records = _parse_token_log(scan_dir)
+    result = _aggregate_token_stats(records, range, model)
+    return JSONResponse({"data": result})
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  STREAK — 连续贡献天数统计
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

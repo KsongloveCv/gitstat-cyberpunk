@@ -269,6 +269,22 @@ export async function getVersion() {
   return data.version
 }
 
+export async function getTokenStats(range = 'thisWeek', model = 'all') {
+  const params = new URLSearchParams({ range })
+  if (model && model !== 'all') {
+    params.set('model', model)
+  }
+  const url = `${API_BASE}/stats/tokens?${params.toString()}`
+  const response = await fetch(url)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch token stats')
+  }
+
+  const data = await response.json()
+  return data.data
+}
+
 export async function getStreakStats(repos = []) {
   const params = new URLSearchParams()
 
