@@ -326,3 +326,95 @@ export async function getWeatherForecast(lat, lon, days = 7) {
   const data = await response.json()
   return data.data
 }
+
+export async function getCommitList(range = 'today', repos = [], startDate = null, endDate = null, limit = 50) {
+  const params = new URLSearchParams()
+  if (range) params.append('range', range)
+  if (startDate) params.append('startDate', startDate)
+  if (endDate) params.append('endDate', endDate)
+  if (limit) params.append('limit', limit)
+
+  if (repos.length > 0 && !repos.includes('all')) {
+    repos.forEach(repo => params.append('repo', repo))
+  }
+
+  const url = `${API_BASE}/stats/commit-list?${params.toString()}`
+  const response = await fetch(url)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch commit list')
+  }
+
+  return response.json()
+}
+
+// ━━━ Gitee API ━━━
+
+export async function getGiteeRepos(owner, page = 1, perPage = 30) {
+  const params = new URLSearchParams({ owner, page, perPage })
+  const response = await fetch(`${API_BASE}/gitee/repos?${params}`)
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to fetch Gitee repos')
+  }
+
+  const data = await response.json()
+  return data.data || []
+}
+
+export async function getGiteeRepoInfo(owner, repo) {
+  const params = new URLSearchParams({ owner, repo })
+  const response = await fetch(`${API_BASE}/gitee/repos/info?${params}`)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch Gitee repo info')
+  }
+
+  const data = await response.json()
+  return data.data
+}
+
+export async function cloneGiteeRepo(owner, repo, cloneUrl) {
+  const response = await fetch(`${API_BASE}/gitee/repos/clone`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ owner, repo, cloneUrl })
+  })
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to clone Gitee repo')
+  }
+
+  const data = await response.json()
+  return data.data
+}
+
+export async function analyzeGiteeRepo(path) {
+  const response = await fetch(`${API_BASE}/gitee/repos/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path })
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to analyze Gitee repo')
+  }
+
+  return response.json()
+}
+
+export async function removeGiteeRepo(path) {
+  const response = await fetch(`${API_BASE}/gitee/repos/remove`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path })
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to remove Gitee repo')
+  }
+
+  return response.json()
+}
