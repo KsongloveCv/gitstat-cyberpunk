@@ -4,8 +4,7 @@ backend-py/__pycache__/
 backend-py/*.pyc
 
 # Build artifacts
-backend/gitstat
-backend/web/dist/
+frontend/dist/
 
 # IDE
 .DS_Store

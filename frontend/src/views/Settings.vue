@@ -46,7 +46,7 @@
         <div class="tech-stack">
           <div class="tech-item">
             <span class="tech-icon">⚡</span>
-            <span>Go 1.26</span>
+            <span>Python / FastAPI</span>
           </div>
           <div class="tech-item">
             <span class="tech-icon">◈</span>
