@@ -15,10 +15,6 @@ export const state = reactive({
   analyzeCache: {},
   repoInfoCache: {},
   repoStatsCache: {},
-  weatherCurrent: null,
-  weatherForecast: [],
-  weatherLoading: false,
-  weatherCoords: null,
   commitList: []
 })
 
@@ -180,24 +176,5 @@ export async function fetchCommitList(range = 'today', repos = []) {
     state.commitList = await api.getCommitList(range, repos)
   } catch (err) {
     console.error('Failed to fetch commit list:', err)
-  }
-}
-
-export async function fetchWeather(lat, lon) {
-  state.weatherLoading = true
-  state.error = null
-  try {
-    const [current, forecast] = await Promise.all([
-      api.getWeatherCurrent(lat, lon),
-      api.getWeatherForecast(lat, lon, 7)
-    ])
-    state.weatherCurrent = current
-    state.weatherForecast = forecast
-    state.weatherCoords = { lat, lon }
-  } catch (err) {
-    state.error = err.message
-    console.error('Failed to fetch weather:', err)
-  } finally {
-    state.weatherLoading = false
   }
 }

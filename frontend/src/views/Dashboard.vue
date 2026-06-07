@@ -152,63 +152,66 @@
           </div>
         </div>
 
-        <!-- 分仓库分人统计 -->
+        <!-- 今日提交详情 -->
         <div class="daily-stats-section">
           <div class="section-header">
             <h3>{{ t('dashboard.todayDetails') }}</h3>
           </div>
           
           <div v-if="sectionLoading.below" class="skeleton-daily">
-            <div v-for="i in 2" :key="i" class="repo-daily-card card">
-              <div class="repo-daily-header">
-                <div class="skeleton-line w50"></div>
-                <div class="skeleton-line w30" style="margin-top:8px"></div>
+            <div v-for="i in 3" :key="i" class="commit-row-skeleton">
+              <div class="skeleton-circle"></div>
+              <div class="skeleton-bar-group">
+                <div class="skeleton-line w60"></div>
+                <div class="skeleton-line w30"></div>
               </div>
-              <div class="authors-table">
-                <div v-for="j in 2" :key="j" class="table-row">
-                  <div class="skeleton-line w35"></div>
-                  <div class="skeleton-line w15"></div>
-                  <div class="skeleton-line w25"></div>
-                </div>
+              <div class="skeleton-bar-group">
+                <div class="skeleton-line w15"></div>
+                <div class="skeleton-line w15"></div>
               </div>
             </div>
           </div>
-          <template v-else-if="state.dailyStats && state.dailyStats.length > 0">
-            <div v-for="repo in state.dailyStats" :key="repo.repoPath" class="repo-daily-card card">
-              <div class="repo-daily-header">
-                <div class="repo-info">
-                  <h4>{{ repo.repoName }}</h4>
-                  <div class="repo-meta">
-                    <span class="branch-badge">{{ repo.currentBranch }}</span>
-                    <span class="last-commit">{{ t('dashboard.lastCommit') }}: {{ repo.lastCommitTime }}</span>
+          <template v-else-if="state.commitList && state.commitList.length > 0">
+            <div class="commit-list card">
+              <div 
+                v-for="commit in state.commitList" 
+                :key="commit.hash" 
+                class="commit-row"
+              >
+                <div class="commit-left">
+                  <div class="commit-hash">{{ commit.hash.slice(0, 7) }}</div>
+                  <div class="commit-info">
+                    <div class="commit-message">{{ commit.message }}</div>
+                    <div class="commit-meta">
+                      <span class="commit-author">{{ commit.author }}</span>
+                      <span v-if="commit.email === userEmail" class="me-badge-small">{{ t('dashboard.me') }}</span>
+                      <span class="commit-repo">{{ commit.repoName }}</span>
+                      <span class="commit-time">{{ formatTimeAgo(commit.date) }}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div class="authors-table">
-                <div class="table-header">
-                  <div class="col-author">{{ t('dashboard.author') }}</div>
-                  <div class="col-commits">{{ t('dashboard.commits') }}</div>
-                  <div class="col-changes">{{ t('dashboard.changes') }}</div>
-                </div>
-                <div 
-                  v-for="author in repo.authors" 
-                  :key="author.email" 
-                  class="table-row"
-                >
-                  <div class="col-author">
-                    <span class="author-name">{{ author.author }}</span>
-                    <span v-if="author.isMe" class="me-badge" :title="t('dashboard.me')">{{ t('dashboard.me') }}</span>
+                <div class="commit-right">
+                  <div class="change-stats">
+                    <span v-if="commit.additions > 0" class="change-additions">+{{ commit.additions }}</span>
+                    <span v-if="commit.deletions > 0" class="change-deletions">-{{ commit.deletions }}</span>
                   </div>
-                  <div class="col-commits">{{ author.commits }}</div>
-                  <div class="col-changes">
-                    <span class="additions">+{{ author.additions }}</span>
-                    <span class="deletions">-{{ author.deletions }}</span>
+                  <div class="change-bar" v-if="commit.additions + commit.deletions > 0">
+                    <div 
+                      class="change-bar-add" 
+                      :style="{ width: barWidth(commit.additions, commit.additions + commit.deletions) }"
+                    ></div>
+                    <div 
+                      class="change-bar-del" 
+                      :style="{ width: barWidth(commit.deletions, commit.additions + commit.deletions) }"
+                    ></div>
                   </div>
                 </div>
               </div>
             </div>
           </template>
+          <div v-else class="no-commits-hint">
+            {{ t('dashboard.noTodayCommits') }}
+          </div>
         </div>
       </div>
   </div>
@@ -217,7 +220,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from '../i18n'
-import { state, fetchOverviewStats, fetchRepoDailyTrend, fetchAuthorRank, loadDashboardS2, fetchWeather } from '../stores/data'
+import { state, fetchOverviewStats, fetchRepoDailyTrend, fetchAuthorRank, loadDashboardS2, fetchCommitList } from '../stores/data'
+import { fetchWeather } from '../stores/weather'
 import StatCard from '../components/StatCard.vue'
 import StreakCard from '../components/StreakCard.vue'
 import WeatherCard from '../components/WeatherCard.vue'
@@ -243,6 +247,26 @@ function getWeekRange() {
   return `${fmt(monday)} - ${fmt(now)}`
 }
 const weekRange = getWeekRange()
+
+function formatTimeAgo(dateStr) {
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now - date
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return t('dashboard.justNow')
+  if (diffMin < 60) return `${diffMin}${t('dashboard.minutesAgo')}`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return `${diffH}${t('dashboard.hoursAgo')}`
+  const diffD = Math.floor(diffH / 24)
+  return `${diffD}${t('dashboard.daysAgo')}`
+}
+
+function barWidth(part, total) {
+  if (total === 0) return '0%'
+  return Math.max(5, Math.round(part / total * 100)) + '%'
+}
+
+const userEmail = 'ksong666@163.com'
 
 const trendChartRef = ref(null)
 const section2Ref = ref(null)
@@ -366,7 +390,7 @@ onMounted(async () => {
   observer = new IntersectionObserver(
     ([entry]) => {
       if (entry.isIntersecting && sectionLoading.below) {
-        loadDashboardS2().then(() => { sectionLoading.below = false })
+        Promise.all([loadDashboardS2(), fetchCommitList('today', [])]).then(() => { sectionLoading.below = false })
         observer.disconnect()
       }
     },
