@@ -1885,6 +1885,142 @@ async def streak_stats(
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  GITEE — 码云代码统计 API Routes
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@app.get("/api/gitee/repos")
+def api_gitee_list_repos(
+    owner: str = Query(..., description="Gitee 用户名或组织名"),
+    page: int = Query(default=1),
+    perPage: int = Query(default=30),
+):
+    """代理 Gitee API：获取某用户/组织的仓库列表。"""
+    if not owner or not re.match(r'^[a-zA-Z0-9_-]+$', owner):
+        raise HTTPException(400, "Invalid owner name")
+    try:
+        repos = gitee_list_repos(owner, page, perPage)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"Gitee API error: {e}")
+    return {"code": 200, "data": repos}
+
+
+@app.get("/api/gitee/repos/info")
+def api_gitee_repo_info(
+    owner: str = Query(...),
+    repo: str = Query(...),
+):
+    """获取单个 Gitee 仓库详情。"""
+    try:
+        info = gitee_get_repo(owner, repo)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"Gitee API error: {e}")
+    return {"code": 200, "data": info}
+
+
+@app.post("/api/gitee/repos/clone")
+async def api_gitee_clone(request: Request):
+    """Clone Gitee 仓库到本地缓存，注册到 Store，返回基础提交统计。"""
+    body = await request.json()
+    owner = body.get("owner", "")
+    repo_name = body.get("repo", "")
+    clone_url = body.get("cloneUrl", "")
+
+    if not clone_url and owner and repo_name:
+        clone_url = f"https://gitee.com/{owner}/{repo_name}.git"
+    if not clone_url:
+        raise HTTPException(400, "cloneUrl is required")
+
+    # Extract owner/repo from clone_url if not provided
+    if not owner or not repo_name:
+        m = re.search(r'gitee\.com/([^/]+)/([^/]+?)(?:\.git)?$', clone_url)
+        if m:
+            owner, repo_name = m.group(1), m.group(2)
+        else:
+            owner, repo_name = "unknown", clone_url.split("/")[-1].replace(".git", "")
+
+    # Clone to cache
+    clone_result = clone_gitee_repo(clone_url, owner, repo_name)
+    local_path = clone_result["path"]
+
+    # Parse git log
+    commits = run_git_log(local_path)
+
+    # Register in Store so existing stats APIs work
+    repo_meta = get_repo_meta(local_path)
+    store.register_repos([{
+        "path": local_path,
+        "name": f"[Gitee] {owner}/{repo_name}",
+        "userEmail": "",
+        "currentBranch": repo_meta.get("currentBranch", "master"),
+        "lastCommitTime": repo_meta.get("lastCommitTime", ""),
+    }])
+    store.set_repo_commits(local_path, commits)
+
+    return {
+        "code": 200,
+        "data": {
+            "path": local_path,
+            "name": f"{owner}/{repo_name}",
+            "commitCount": len(commits),
+            "cloneUrl": clone_url,
+        },
+        "message": "Clone and parse complete",
+    }
+
+
+@app.post("/api/gitee/repos/analyze")
+async def api_gitee_analyze(request: Request):
+    """对已 clone 的 Gitee 仓库进行深度分析（复用现有逻辑）。"""
+    body = await request.json()
+    path = body.get("path", "")
+    if not path:
+        raise HTTPException(400, "path is required")
+
+    cache = store.get_repo_cache(path)
+    if not cache:
+        raise HTTPException(404, "Repo not found. Clone first.")
+
+    if cache.get("analyzed"):
+        return {
+            "name": cache["name"], "path": cache["path"],
+            "branchCount": cache["branchCount"], "branches": cache["branches"],
+            "fileCount": cache["fileCount"], "totalLines": cache["totalLines"],
+            "languages": cache["languages"],
+        }
+
+    result = analyze_repo_deep(path)
+    store.update_repo(
+        path,
+        branchCount=result["branchCount"],
+        branches=result["branches"],
+        fileCount=result["fileCount"],
+        totalLines=result["totalLines"],
+        languages=result["languages"],
+        analyzed=True,
+    )
+    return result
+
+
+@app.post("/api/gitee/repos/remove")
+async def api_gitee_remove(request: Request):
+    """从 Store 中移除已加载的 Gitee 仓库（不删除本地缓存文件）。"""
+    body = await request.json()
+    path = body.get("path", "")
+    if not path:
+        raise HTTPException(400, "path is required")
+    cache = store.get_repo_cache(path)
+    if cache:
+        cache["initialized"] = False
+        cache["commits"] = []
+        cache["analyzed"] = False
+    return {"code": 200, "message": "Repo removed from memory"}
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  STATIC FILES — 前端 SPA
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
