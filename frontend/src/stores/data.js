@@ -14,7 +14,11 @@ export const state = reactive({
   analyzing: false,
   analyzeCache: {},
   repoInfoCache: {},
-  repoStatsCache: {}
+  repoStatsCache: {},
+  weatherCurrent: null,
+  weatherForecast: [],
+  weatherLoading: false,
+  weatherCoords: null
 })
 
 export async function performScan(path, timeRange) {
@@ -167,5 +171,24 @@ export async function loadScanPath() {
     state.scanPath = info.path
   } catch (err) {
     console.error('Failed to load scan path:', err)
+  }
+}
+
+export async function fetchWeather(lat, lon) {
+  state.weatherLoading = true
+  state.error = null
+  try {
+    const [current, forecast] = await Promise.all([
+      api.getWeatherCurrent(lat, lon),
+      api.getWeatherForecast(lat, lon, 7)
+    ])
+    state.weatherCurrent = current
+    state.weatherForecast = forecast
+    state.weatherCoords = { lat, lon }
+  } catch (err) {
+    state.error = err.message
+    console.error('Failed to fetch weather:', err)
+  } finally {
+    state.weatherLoading = false
   }
 }

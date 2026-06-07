@@ -20,6 +20,19 @@ export const STAT_COLORS = {
 }
 
 // ECharts dark cyberpunk theme defaults
+export const WEATHER_EMOJI_MAP = {
+  clear: '☀️',
+  'mostly-clear': '🌤️',
+  'partly-cloudy': '⛅',
+  overcast: '☁️',
+  fog: '🌫️',
+  drizzle: '🌦️',
+  rain: '🌧️',
+  snow: '❄️',
+  thunderstorm: '⛈️',
+  unknown: '🌡️',
+}
+
 export const CYBERPUNK_CHART_THEME = {
   tooltip: {
     backgroundColor: 'rgba(8, 12, 32, 0.95)',
