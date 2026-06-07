@@ -8,7 +8,8 @@ const messages = {
       tokens: 'Token分析',
       repos: '仓库信息',
       settings: '设置',
-      github: 'GitHub'
+      github: 'GitHub',
+      gitee: 'Gitee'
     },
     dashboard: {
       switchDirectory: '切换目录',
@@ -213,6 +214,29 @@ const messages = {
       unitKmh: 'km/h',
       unitPercent: '%',
       unitMm: 'mm'
+    },
+    gitee: {
+      title: 'Gitee 代码统计',
+      subtitle: '码云仓库浏览 · 深度分析 · 混合模式',
+      searchPlaceholder: '输入 Gitee 用户名或组织名...',
+      scanRepos: '扫描仓库',
+      scanning: '扫描中...',
+      repoList: '仓库列表',
+      deepAnalyze: '深度分析',
+      analyzing: '分析中...',
+      analyzed: '已分析',
+      cachedRepos: '已缓存仓库',
+      noData: '请输入用户名开始探索 Gitee 仓库',
+      loading: '加载中...',
+      stars: '星',
+      commits: '次提交',
+      updated: '更新于',
+      cloneFirst: '请先克隆仓库',
+      removeRepo: '移除',
+      totalCommits: '总提交数',
+      totalAdditions: '新增行数',
+      totalDeletions: '删除行数',
+      activeAuthors: '活跃作者'
     }
   },
   en: {
@@ -222,7 +246,8 @@ const messages = {
       tokens: 'Tokens',
       repos: 'Repositories',
       settings: 'Settings',
-      github: 'GitHub'
+      github: 'GitHub',
+      gitee: 'Gitee'
     },
     dashboard: {
       switchDirectory: 'Switch Directory',
@@ -427,6 +452,29 @@ const messages = {
       unitKmh: 'km/h',
       unitPercent: '%',
       unitMm: 'mm'
+    },
+    gitee: {
+      title: 'Gitee Stats',
+      subtitle: 'Repo Browser · Deep Analysis · Hybrid Mode',
+      searchPlaceholder: 'Enter Gitee username or org...',
+      scanRepos: 'Scan Repos',
+      scanning: 'Scanning...',
+      repoList: 'Repository List',
+      deepAnalyze: 'Deep Analyze',
+      analyzing: 'Analyzing...',
+      analyzed: 'Analyzed',
+      cachedRepos: 'Cached Repos',
+      noData: 'Enter a username to explore Gitee repositories',
+      loading: 'Loading...',
+      stars: 'stars',
+      commits: 'commits',
+      updated: 'updated',
+      cloneFirst: 'Clone the repo first',
+      removeRepo: 'Remove',
+      totalCommits: 'Total Commits',
+      totalAdditions: 'Additions',
+      totalDeletions: 'Deletions',
+      activeAuthors: 'Active Authors'
     }
   }
 }
