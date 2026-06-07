@@ -45,6 +45,10 @@
           <span class="nav-icon">▤</span>
           {{ t('nav.repos') }}
         </a>
+        <a @click="setView('gitee')" :class="{ active: currentView === 'gitee' }">
+          <span class="nav-icon">◆</span>
+          {{ t('nav.gitee') }}
+        </a>
         <a @click="setView('settings')" :class="{ active: currentView === 'settings' }">
           <span class="nav-icon">⚙</span>
           {{ t('nav.settings') }}
@@ -94,8 +98,9 @@ const Analytics = defineAsyncComponent(() => import('./views/Analytics.vue'))
 const TokenAnalytics = defineAsyncComponent(() => import('./views/TokenAnalytics.vue'))
 const RepoSection = defineAsyncComponent(() => import('./views/RepoSection.vue'))
 const Settings = defineAsyncComponent(() => import('./views/Settings.vue'))
+const GiteeStats = defineAsyncComponent(() => import('./views/GiteeStats.vue'))
 
-const componentMap = { dashboard: Dashboard, analytics: Analytics, tokens: TokenAnalytics, repos: RepoSection, settings: Settings }
+const componentMap = { dashboard: Dashboard, analytics: Analytics, tokens: TokenAnalytics, repos: RepoSection, gitee: GiteeStats, settings: Settings }
 
 const { t, locale, setLocale } = useI18n()
 const currentView = ref(localStorage.getItem('currentView') || 'dashboard')
