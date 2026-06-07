@@ -68,6 +68,7 @@ from git_utils import (
 )
 from store import Store, store
 from gitee import gitee_router, gitee_api, gitee_list_repos, gitee_get_repo, clone_gitee_repo, gitee_load_commits
+from weather import weather_router
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  CONFIG
@@ -1061,8 +1062,9 @@ app.add_middleware(
 # Brotli compression middleware
 app.add_middleware(BrotliMiddleware, quality=6)
 
-# Register Gitee module routes
+# Register module routes
 app.include_router(gitee_router)
+app.include_router(weather_router)
 
 
 # Global exception handler
