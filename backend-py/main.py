@@ -15,7 +15,11 @@ import threading
 import math
 import urllib.request
 import urllib.parse
+import logging
 from pathlib import Path
+
+logging.basicConfig(level=logging.WARNING, format='%(levelname)s [%(name)s] %(message)s')
+log = logging.getLogger('gitstat')
 from datetime import datetime, timedelta, date
 from typing import Optional
 from collections import defaultdict
@@ -137,7 +141,8 @@ def get_git_version() -> str:
         ).stdout.strip()
         m = re.search(r"\d+\.\d+\.\d+", out)
         return f"git {m.group()}" if m else out
-    except Exception:
+    except Exception as e:
+        log.warning("Failed to detect git version: %s", e)
         return "git not found"
 
 
@@ -454,7 +459,8 @@ def scan_metadata(repo_path: str) -> Optional[dict]:
             "userEmail": user_email,
             "lastCommitTime": last_commit_time,
         }
-    except Exception:
+    except Exception as e:
+        log.warning("Failed to extract repo meta for %s: %s", path, e)
         return None
 
 
@@ -1372,7 +1378,8 @@ def _fetch_open_meteo(params: dict) -> dict:
         req = urllib.request.Request(url, headers={"User-Agent": "GitStat/2.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode("utf-8"))
-    except Exception:
+    except Exception as e:
+        log.warning("Open-Meteo API error: %s", e)
         return {}
 
 
@@ -1562,9 +1569,10 @@ def _parse_token_log(scan_path: str) -> list[dict]:
                                 "output": output_t,
                                 "timestamp": timestamp,
                             })
-            except Exception:
+            except Exception as e:
+                log.debug("Failed to parse Hermes session file %s: %s", f, e)
                 continue
-    
+
     # 扫描项目目录下的 token 日志
     for pattern in ["*.token-log", "*.token_usage", "token_log*.json", "token_log*.csv"]:
         for f in Path(scan_path).rglob(pattern):
@@ -1603,7 +1611,8 @@ def _parse_token_log(scan_path: str) -> list[dict]:
                             ts = row.get("timestamp") or row.get("date") or ""
                             if model and (input_t > 0 or output_t > 0):
                                 records.append({"model": _clean_model_name(model), "input": input_t, "output": output_t, "timestamp": ts})
-            except Exception:
+            except Exception as e:
+                log.debug("Failed to parse token log: %s", e)
                 continue
     
     return records
@@ -2078,8 +2087,8 @@ def open_browser(url: str):
             subprocess.Popen(["cmd", "/c", "start", url])
         else:
             subprocess.Popen(["xdg-open", url])
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("Failed to open browser: %s", e)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

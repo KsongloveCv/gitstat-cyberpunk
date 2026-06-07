@@ -1,5 +1,13 @@
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
+// Helper: append repo filter params (skip when 'all' or empty)
+function appendRepoParams(params, repos) {
+  if (repos && repos.length > 0 && !repos.includes('all')) {
+    repos.forEach(repo => params.append('repo', repo))
+  }
+  return params
+}
+
 export async function setScanPath(path) {
   const response = await fetch(`${API_BASE}/scan/path`, {
     method: 'POST',
@@ -34,9 +42,7 @@ export async function getOverviewStats(startDate = null, endDate = null, repos =
   if (endDate) params.append('endDate', endDate)
   
   // repos为空或包含'all'时不传repo参数（后端返回所有仓库）
-  if (repos.length > 0 && !repos.includes('all')) {
-    repos.forEach(repo => params.append('repo', repo))
-  }
+  appendRepoParams(params, repos)
   
   const url = `${API_BASE}/stats/overview?${params.toString()}`
   const response = await fetch(url)
@@ -76,9 +82,7 @@ export async function getDailyStats(email, timeRange = 'week', repos = [], start
   if (endDate) params.append('endDate', endDate)
   
   // repos为空或包含'all'时不传repo参数（后端返回所有仓库）
-  if (repos.length > 0 && !repos.includes('all')) {
-    repos.forEach(repo => params.append('repo', repo))
-  }
+  appendRepoParams(params, repos)
   
   const url = `${API_BASE}/stats/daily?${params.toString()}`
   const response = await fetch(url)
@@ -96,9 +100,7 @@ export async function getAuthorRank(repos = [], startDate = null, endDate = null
   if (endDate) params.append('endDate', endDate)
   if (timeRange) params.append('range', timeRange)
   
-  if (repos.length > 0 && !repos.includes('all')) {
-    repos.forEach(repo => params.append('repo', repo))
-  }
+  appendRepoParams(params, repos)
   
   const url = `${API_BASE}/stats/authors?${params.toString()}`
   const response = await fetch(url)
@@ -117,9 +119,7 @@ export async function getWeeklyStats(email, timeRange = 'week', repos = [], star
   if (startDate) params.append('startDate', startDate)
   if (endDate) params.append('endDate', endDate)
 
-  if (repos.length > 0 && !repos.includes('all')) {
-    repos.forEach(repo => params.append('repo', repo))
-  }
+  appendRepoParams(params, repos)
 
   const url = `${API_BASE}/stats/weekly?${params.toString()}`
   const response = await fetch(url)
@@ -138,9 +138,7 @@ export async function getMonthlyStats(email, timeRange = 'month', repos = [], st
   if (startDate) params.append('startDate', startDate)
   if (endDate) params.append('endDate', endDate)
 
-  if (repos.length > 0 && !repos.includes('all')) {
-    repos.forEach(repo => params.append('repo', repo))
-  }
+  appendRepoParams(params, repos)
 
   const url = `${API_BASE}/stats/monthly?${params.toString()}`
   const response = await fetch(url)
@@ -159,9 +157,7 @@ export async function getYearlyStats(email, timeRange = 'year', repos = [], star
   if (startDate) params.append('startDate', startDate)
   if (endDate) params.append('endDate', endDate)
 
-  if (repos.length > 0 && !repos.includes('all')) {
-    repos.forEach(repo => params.append('repo', repo))
-  }
+  appendRepoParams(params, repos)
 
   const url = `${API_BASE}/stats/yearly?${params.toString()}`
   const response = await fetch(url)
@@ -178,9 +174,7 @@ export async function getActivityHeatmap(repos = [], startDate = null, endDate =
   if (startDate) params.append('startDate', startDate)
   if (endDate) params.append('endDate', endDate)
   
-  if (repos.length > 0 && !repos.includes('all')) {
-    repos.forEach(repo => params.append('repo', repo))
-  }
+  appendRepoParams(params, repos)
   
   const url = `${API_BASE}/stats/activity-heatmap?${params.toString()}`
   const response = await fetch(url)
@@ -198,9 +192,7 @@ export async function getRepoComparison(repos = [], startDate = null, endDate = 
   if (endDate) params.append('endDate', endDate)
   if (timeRange) params.append('range', timeRange)
   
-  if (repos.length > 0 && !repos.includes('all')) {
-    repos.forEach(repo => params.append('repo', repo))
-  }
+  appendRepoParams(params, repos)
   
   const url = `${API_BASE}/stats/repo-comparison?${params.toString()}`
   const response = await fetch(url)
@@ -285,12 +277,30 @@ export async function getTokenStats(range = 'thisWeek', model = 'all') {
   return data.data
 }
 
+export async function getTokenBudget() {
+  const url = `${API_BASE}/stats/tokens/budget`
+  const response = await fetch(url)
+  if (!response.ok) throw new Error('Failed to fetch token budget')
+  const data = await response.json()
+  return data
+}
+
+export async function setTokenBudget(monthlyBudget) {
+  const url = `${API_BASE}/stats/tokens/budget`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ monthlyBudget })
+  })
+  if (!response.ok) throw new Error('Failed to set token budget')
+  const data = await response.json()
+  return data
+}
+
 export async function getStreakStats(repos = []) {
   const params = new URLSearchParams()
 
-  if (repos.length > 0 && !repos.includes('all')) {
-    repos.forEach(repo => params.append('repo', repo))
-  }
+  appendRepoParams(params, repos)
 
   const url = `${API_BASE}/stats/streak?${params.toString()}`
   const response = await fetch(url)
@@ -334,9 +344,7 @@ export async function getCommitList(range = 'today', repos = [], startDate = nul
   if (endDate) params.append('endDate', endDate)
   if (limit) params.append('limit', limit)
 
-  if (repos.length > 0 && !repos.includes('all')) {
-    repos.forEach(repo => params.append('repo', repo))
-  }
+  appendRepoParams(params, repos)
 
   const url = `${API_BASE}/stats/commit-list?${params.toString()}`
   const response = await fetch(url)
