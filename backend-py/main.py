@@ -57,6 +57,7 @@ from fastapi import FastAPI, Query, Request, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from brotli_asgi import BrotliMiddleware
 import uvicorn
 
 # Import from refactored modules
@@ -996,6 +997,39 @@ def parse_time_params(start_date_str: str = "", end_date_str: str = "",
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  UTILS — 统一响应 + 简易限流
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def ok(data=None, message: str = ""):
+    """统一成功响应。"""
+    return JSONResponse({"code": 200, "data": data, "message": message})
+
+
+def err(code: int, message: str):
+    """统一错误响应。"""
+    return JSONResponse({"code": code, "message": message}, status_code=code)
+
+
+# Simple in-memory rate limiter
+_rate_store: dict[str, list] = {}
+
+def check_rate_limit(key: str, max_req: int = 60, window: int = 60) -> bool:
+    """窗口内超过 max_req 次返回 False。"""
+    now = time.time()
+    bucket = _rate_store.get(key, [])
+    bucket = [t for t in bucket if now - t < window]
+    if len(bucket) >= max_req:
+        return False
+    bucket.append(now)
+    _rate_store[key] = bucket
+    return True
+
+rate_limited = JSONResponse(
+    {"code": 429, "message": "Too many requests"}, status_code=429
+)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  FASTAPI APP
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1013,8 +1047,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Brotli compression middleware
+app.add_middleware(BrotliMiddleware, quality=6)
+
 # Register Gitee module routes
 app.include_router(gitee_router)
+
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    log.error("Unhandled exception: %s", exc, exc_info=True)
+    return JSONResponse(
+        content={"code": 500, "message": "Internal server error"},
+        status_code=500
+    )
 
 
 def _load_repos(repo_paths: list[str] = None) -> list[dict]:
@@ -1683,99 +1730,79 @@ def _clean_model_name(raw: str) -> str:
     return m
 
 
-def _aggregate_token_stats(records: list[dict], time_range: str, model_filter: Optional[str] = None) -> dict:
-    """聚合 token 统计数据。"""
-    today = date.today()
-    
-    # 时间范围过滤
-    range_map = {
-        "thisWeek":    timedelta(weeks=1),
-        "lastWeek":    timedelta(weeks=2),
-        "thisMonth":   timedelta(days=30),
-        "lastMonth":   timedelta(days=60),
-        "thisYear":    timedelta(days=365),
-        "customPeriod": timedelta(days=365*2),
-    }
-    cutoff = today - range_map.get(time_range, timedelta(days=365))
-    
+def _parse_token_timestamp(ts: str, today: date) -> date:
+    """解析多种格式的时间戳，返回 date 对象。"""
+    for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"]:
+        try:
+            return datetime.strptime(ts[:26], fmt).date()
+        except ValueError:
+            continue
+    return today
+
+
+def _filter_token_records(records: list[dict], cutoff: date, model_filter, today: date) -> list[dict]:
+    """按模型和时间范围过滤 token 记录。"""
     filtered = []
     for r in records:
-        # 模型过滤
         if model_filter and model_filter != "all" and r["model"] != model_filter:
             continue
-        # 时间过滤
-        ts = r.get("timestamp", "")
-        if ts:
-            try:
-                # 支持多种时间格式
-                for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"]:
-                    try:
-                        dt = datetime.strptime(ts[:26], fmt).date()
-                        break
-                    except ValueError:
-                        continue
-                else:
-                    dt = today  # 无法解析的默认今天
-                if dt < cutoff:
-                    continue
-                r["_date"] = dt.strftime("%Y-%m-%d")
-            except Exception:
-                r["_date"] = today.strftime("%Y-%m-%d")
-        else:
-            r["_date"] = today.strftime("%Y-%m-%d")
+        dt = _parse_token_timestamp(r.get("timestamp", ""), today) if r.get("timestamp") else today
+        if dt < cutoff:
+            continue
+        r["_date"] = dt.strftime("%Y-%m-%d")
         filtered.append(r)
-    
-    if not filtered:
-        # 如果没有真实数据，生成模拟数据用于演示
-        filtered = _generate_demo_token_data(today, cutoff, model_filter)
-    
-    # ── 统计计算 ──
-    total_input = sum(r["input"] for r in filtered)
-    total_output = sum(r["output"] for r in filtered)
-    total_tokens = total_input + total_output
-    
-    # 模型维度聚合
-    model_agg = {}
-    for r in filtered:
-        m = r["model"]
-        if m not in model_agg:
-            model_agg[m] = {"input": 0, "output": 0}
-        model_agg[m]["input"] += r["input"]
-        model_agg[m]["output"] += r["output"]
-    
-    # 成本计算
+    return filtered or _generate_demo_token_data(today, cutoff, model_filter)
+
+
+def _calc_token_costs(model_agg: dict) -> tuple[float, list[dict]]:
+    """计算每个模型的成本和排名。"""
     total_cost = 0.0
     model_rank = []
     for m, agg in model_agg.items():
-        pricing = MODEL_PRICING.get(m, {"input": 1.00, "output": 3.00})  # 默认价格
+        pricing = MODEL_PRICING.get(m, {"input": 1.00, "output": 3.00})
         cost = (agg["input"] / 1000) * pricing["input"] + (agg["output"] / 1000) * pricing["output"]
         total_cost += cost
-        model_rank.append({
-            "model": m,
-            "input": agg["input"],
-            "output": agg["output"],
-            "cost": round(cost, 4),
-        })
-    # 按总token排序
+        model_rank.append({"model": m, "input": agg["input"], "output": agg["output"], "cost": round(cost, 4)})
     model_rank.sort(key=lambda x: x["input"] + x["output"], reverse=True)
-    
-    # 趋势数据（按日期聚合）
-    trend_map = {}
+    return total_cost, model_rank
+
+
+def _aggregate_token_stats(records: list[dict], time_range: str, model_filter: Optional[str] = None) -> dict:
+    """聚合 token 统计数据（已拆分为子函数）。"""
+    today = date.today()
+    range_map = {
+        "thisWeek": timedelta(weeks=1), "lastWeek": timedelta(weeks=2),
+        "thisMonth": timedelta(days=30), "lastMonth": timedelta(days=60),
+        "thisYear": timedelta(days=365), "customPeriod": timedelta(days=365*2),
+    }
+    cutoff = today - range_map.get(time_range, timedelta(days=365))
+    filtered = _filter_token_records(records, cutoff, model_filter, today)
+
+    total_input = sum(r["input"] for r in filtered)
+    total_output = sum(r["output"] for r in filtered)
+
+    model_agg: dict[str, dict] = {}
+    for r in filtered:
+        m = r["model"]
+        model_agg.setdefault(m, {"input": 0, "output": 0})
+        model_agg[m]["input"] += r["input"]
+        model_agg[m]["output"] += r["output"]
+
+    total_cost, model_rank = _calc_token_costs(model_agg)
+
+    # 趋势数据
+    trend_map: dict[str, dict] = {}
     for r in filtered:
         ds = r.get("_date", "")
-        if ds not in trend_map:
-            trend_map[ds] = {"input": 0, "output": 0}
+        trend_map.setdefault(ds, {"input": 0, "output": 0})
         trend_map[ds]["input"] += r["input"]
         trend_map[ds]["output"] += r["output"]
     trend = [{"date": k, "input": v["input"], "output": v["output"]} for k, v in sorted(trend_map.items())]
-    
+
     return {
-        "totalInput": total_input,
-        "totalOutput": total_output,
-        "totalTokens": total_tokens,
-        "totalCost": round(total_cost, 2),
-        "modelRank": model_rank,
-        "trend": trend,
+        "totalInput": total_input, "totalOutput": total_output,
+        "totalTokens": total_input + total_output, "totalCost": round(total_cost, 2),
+        "modelRank": model_rank, "trend": trend,
         "availableModels": list(model_agg.keys()),
     }
 

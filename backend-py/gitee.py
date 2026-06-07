@@ -5,13 +5,27 @@ import urllib.request
 import subprocess
 import shutil
 from pathlib import Path
+import time
 from fastapi import APIRouter, Query, Request, HTTPException
+from fastapi.responses import JSONResponse
 from store import store
 from git_utils import run_git_log, get_repo_meta
 
 GITEE_API_BASE = "https://gitee.com/api/v5"
 GITEE_CACHE_DIR = Path.home() / ".gitstat-gitee-cache"
 GITEE_ACCESS_TOKEN = __import__("os").environ.get("GITEE_TOKEN", "")
+
+# Rate limiting
+_rate_bucket: list = []
+
+def _check_rate(max_req=30, window=60):
+    """Simple sliding-window rate limiter for Gitee API calls."""
+    now = time.time()
+    global _rate_bucket
+    _rate_bucket = [t for t in _rate_bucket if now - t < window]
+    if len(_rate_bucket) >= max_req:
+        raise HTTPException(429, "Too many requests, slow down")
+    _rate_bucket.append(now)
 
 def gitee_api(path: str) -> dict:
     """调用 Gitee Open API v5，返回 JSON。支持可选的 GITEE_TOKEN 认证。"""
@@ -143,6 +157,7 @@ def api_gitee_list_repos(
     perPage: int = Query(default=30),
 ):
     """代理 Gitee API：获取某用户/组织的仓库列表。"""
+    _check_rate(max_req=30, window=60)
     if not owner or not re.match(r'^[a-zA-Z0-9_-]+$', owner):
         raise HTTPException(400, "Invalid owner name")
     try:
