@@ -1781,7 +1781,7 @@ def _calc_token_costs(model_agg: dict) -> tuple[float, list[dict]]:
 
 
 def _aggregate_token_stats(records: list[dict], time_range: str, model_filter: Optional[str] = None) -> dict:
-    """聚合 token 统计数据（已拆分为子函数）。"""
+    """聚合 token 统计数据，含效率指标、成本预测、时段对比、对话Top10、热力图。"""
     today = date.today()
     range_map = {
         "thisWeek": timedelta(weeks=1), "lastWeek": timedelta(weeks=2),
@@ -1789,34 +1789,139 @@ def _aggregate_token_stats(records: list[dict], time_range: str, model_filter: O
         "thisYear": timedelta(days=365), "customPeriod": timedelta(days=365*2),
     }
     cutoff = today - range_map.get(time_range, timedelta(days=365))
+    range_days = (today - cutoff).days
+    prev_cutoff = cutoff - timedelta(days=range_days)
+
     filtered = _filter_token_records(records, cutoff, model_filter, today)
+    prev_filtered = _filter_token_records(records, prev_cutoff, model_filter, cutoff)
+    all_filtered = _filter_token_records(records, today - timedelta(days=365), model_filter, today)
+
+    if not filtered:
+        filtered = _generate_demo_token_data(today, cutoff, model_filter)
+        prev_filtered = _generate_demo_token_data(cutoff - timedelta(days=1), prev_cutoff, model_filter)
+        all_filtered = _generate_demo_token_data(today, today - timedelta(days=365), model_filter)
 
     total_input = sum(r["input"] for r in filtered)
     total_output = sum(r["output"] for r in filtered)
+    total_tokens = total_input + total_output
 
+    # ── 模型维度聚合 + 使用频次 ──
     model_agg: dict[str, dict] = {}
+    model_sessions: dict[str, int] = {}
     for r in filtered:
         m = r["model"]
         model_agg.setdefault(m, {"input": 0, "output": 0})
         model_agg[m]["input"] += r["input"]
         model_agg[m]["output"] += r["output"]
+        model_sessions[m] = model_sessions.get(m, 0) + 1
 
     total_cost, model_rank = _calc_token_costs(model_agg)
 
-    # 趋势数据
+    # ── 效率指标 ──
+    models_efficiency = []
+    best_value_model = ""
+    best_value_per_dollar = 0.0
+    for m, agg in model_agg.items():
+        pricing = MODEL_PRICING.get(m, {"input": 1.00, "output": 3.00})
+        cost = (agg["input"] / 1000) * pricing["input"] + (agg["output"] / 1000) * pricing["output"]
+        ratio = round(agg["output"] / max(agg["input"], 1), 3)
+        per_dollar = round((agg["input"] + agg["output"]) / max(cost, 0.001), 1)
+        models_efficiency.append({"model": m, "ratio": ratio, "perDollar": per_dollar})
+        if per_dollar > best_value_per_dollar:
+            best_value_per_dollar = per_dollar
+            best_value_model = m
+    avg_ratio = round(sum(e["ratio"] for e in models_efficiency) / max(len(models_efficiency), 1), 3)
+
+    # ── 趋势数据（含成本） ──
     trend_map: dict[str, dict] = {}
     for r in filtered:
         ds = r.get("_date", "")
-        trend_map.setdefault(ds, {"input": 0, "output": 0})
+        trend_map.setdefault(ds, {"input": 0, "output": 0, "cost": 0.0})
         trend_map[ds]["input"] += r["input"]
         trend_map[ds]["output"] += r["output"]
-    trend = [{"date": k, "input": v["input"], "output": v["output"]} for k, v in sorted(trend_map.items())]
+        pricing = MODEL_PRICING.get(r["model"], {"input": 1.00, "output": 3.00})
+        trend_map[ds]["cost"] += (r["input"] / 1000) * pricing["input"] + (r["output"] / 1000) * pricing["output"]
+    trend = [{"date": k, "input": v["input"], "output": v["output"], "cost": round(v["cost"], 4)} for k, v in sorted(trend_map.items())]
+
+    # ── 成本预测 ──
+    days_in_range = max((today - cutoff).days, 1)
+    daily_avg_cost = total_cost / days_in_range
+    mid_point = len(trend) // 2
+    if mid_point > 0 and len(trend) > mid_point:
+        first_daily = sum(t["cost"] for t in trend[:mid_point]) / mid_point
+        second_daily = sum(t["cost"] for t in trend[mid_point:]) / max(len(trend) - mid_point, 1)
+        if second_daily > first_daily * 1.1:
+            trend_dir = "up"
+        elif second_daily < first_daily * 0.9:
+            trend_dir = "down"
+        else:
+            trend_dir = "stable"
+    else:
+        trend_dir = "stable"
+    monthly_estimate = round(daily_avg_cost * 30, 2)
+
+    # ── 时段对比 ──
+    prev_total_tokens = sum(r["input"] + r["output"] for r in prev_filtered)
+    prev_total_cost = 0.0
+    for r in prev_filtered:
+        pricing = MODEL_PRICING.get(r["model"], {"input": 1.00, "output": 3.00})
+        prev_total_cost += (r["input"] / 1000) * pricing["input"] + (r["output"] / 1000) * pricing["output"]
+    change_pct = round(((total_tokens - prev_total_tokens) / max(prev_total_tokens, 1)) * 100, 1) if prev_total_tokens > 0 else 0.0
+
+    # ── 对话Top10 ──
+    session_agg = {}
+    for r in filtered:
+        sid = r.get("session_id") or f"{r.get('_date', 'unknown')}_{r['model']}"
+        if sid not in session_agg:
+            session_agg[sid] = {"sessionId": sid, "model": r["model"], "input": 0, "output": 0, "date": r.get("_date", "")}
+        session_agg[sid]["input"] += r["input"]
+        session_agg[sid]["output"] += r["output"]
+    top_sessions = []
+    for s in session_agg.values():
+        pricing = MODEL_PRICING.get(s["model"], {"input": 1.00, "output": 3.00})
+        cost = (s["input"] / 1000) * pricing["input"] + (s["output"] / 1000) * pricing["output"]
+        s["cost"] = round(cost, 4)
+        top_sessions.append(s)
+    top_sessions.sort(key=lambda x: x["input"] + x["output"], reverse=True)
+    top_sessions = top_sessions[:10]
+
+    # ── 热力图数据 ──
+    heat_map = {}
+    for r in (all_filtered if all_filtered else filtered):
+        ds = r.get("_date", "")
+        heat_map[ds] = heat_map.get(ds, 0) + r["input"] + r["output"]
+    heat_days = min((today - (today - timedelta(days=365))).days, 365)
+    heatmap_data = []
+    for i in range(heat_days):
+        d = today - timedelta(days=i)
+        ds = d.strftime("%Y-%m-%d")
+        heatmap_data.append({"date": ds, "tokens": heat_map.get(ds, 0), "isToday": d == today})
 
     return {
         "totalInput": total_input, "totalOutput": total_output,
-        "totalTokens": total_input + total_output, "totalCost": round(total_cost, 2),
+        "totalTokens": total_tokens, "totalCost": round(total_cost, 2),
         "modelRank": model_rank, "trend": trend,
         "availableModels": list(model_agg.keys()),
+        # ── 新增字段 ──
+        "efficiency": {
+            "averageRatio": avg_ratio,
+            "bestValueModel": best_value_model,
+            "bestValuePerDollar": best_value_per_dollar,
+            "modelsEfficiency": models_efficiency,
+        },
+        "costPrediction": {
+            "monthlyEstimate": monthly_estimate,
+            "dailyAvg": round(daily_avg_cost, 2),
+            "trendDirection": trend_dir,
+        },
+        "periodComparison": {
+            "currentPeriod": {"total": total_tokens, "cost": round(total_cost, 2)},
+            "previousPeriod": {"total": prev_total_tokens, "cost": round(prev_total_cost, 2)},
+            "changePercent": change_pct,
+        },
+        "topSessions": top_sessions,
+        "heatmapData": heatmap_data,
+        "modelSessions": model_sessions,
     }
 
 
@@ -1871,6 +1976,49 @@ async def token_stats(
     result = _aggregate_token_stats(records, range, model)
     return JSONResponse({"data": result})
 
+
+
+
+# ── 预算管理 ──
+BUDGET_FILE = Path.home() / ".hermes" / "token_budget.json"
+
+def _read_budget() -> dict:
+    if BUDGET_FILE.exists():
+        try:
+            with open(BUDGET_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"monthlyBudget": 100.0}
+
+def _write_budget(data: dict) -> None:
+    BUDGET_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(BUDGET_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+@app.get("/api/stats/tokens/budget")
+async def get_budget():
+    budget_cfg = _read_budget()
+    monthly = budget_cfg.get("monthlyBudget", 100.0)
+    scan_dir = store.scan_path or os.getcwd()
+    records = _parse_token_log(scan_dir)
+    result = _aggregate_token_stats(records, "thisMonth", None)
+    current_spent = result.get("totalCost", 0.0)
+    pct = round(current_spent / max(monthly, 0.01) * 100, 1)
+    return JSONResponse({
+        "monthlyBudget": monthly, "currentSpent": current_spent,
+        "percentUsed": pct, "isOverBudget": current_spent > monthly,
+    })
+
+class BudgetSetBody(BaseModel):
+    monthlyBudget: float
+
+@app.post("/api/stats/tokens/budget")
+async def set_budget(body: BudgetSetBody):
+    budget_cfg = _read_budget()
+    budget_cfg["monthlyBudget"] = body.monthlyBudget
+    _write_budget(budget_cfg)
+    return JSONResponse({"success": True, "monthlyBudget": body.monthlyBudget})
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  STREAK — 连续贡献天数统计
