@@ -32,7 +32,12 @@ const messages = {
       author: '作者',
       commits: '提交数',
       changes: '变更',
-      me: '我'
+      me: '我',
+      noTodayCommits: '今天还没有提交记录',
+      justNow: '刚刚',
+      minutesAgo: '分钟前',
+      hoursAgo: '小时前',
+      daysAgo: '天前'
     },
     scan: {
       title: '扫描Git仓库',
@@ -270,7 +275,12 @@ const messages = {
       author: 'Author',
       commits: 'Commits',
       changes: 'Changes',
-      me: 'ME'
+      me: 'ME',
+      noTodayCommits: 'No commits today',
+      justNow: 'just now',
+      minutesAgo: 'm ago',
+      hoursAgo: 'h ago',
+      daysAgo: 'd ago'
     },
     scan: {
       title: 'Scan Git Repositories',

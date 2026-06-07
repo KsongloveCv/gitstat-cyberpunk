@@ -1,0 +1,109 @@
+<h2>Gitee 混合模式 — 页面流程设计</h2>
+<p class="subtitle">方案 C：Gitee API 快速浏览 → 本地深度分析</p>
+
+<div class="section">
+  <h3>用户操作流程</h3>
+  <div class="mockup">
+    <div class="mockup-header">🔍 输入 Gitee 用户名/组织名 → 浏览仓库 → 选择深度分析</div>
+    <div class="mockup-body">
+      <div style="display:flex;gap:20px;align-items:center;padding:16px;">
+        <div style="flex:1;text-align:center">
+          <div class="placeholder" style="height:60px;line-height:60px;border:2px dashed #00f5ff">🔍 输入 Gitee 用户名</div>
+          <span class="label">Step 1</span>
+        </div>
+        <span style="font-size:2rem;color:var(--neon-cyan)">→</span>
+        <div style="flex:1;text-align:center">
+          <div class="placeholder" style="height:60px;line-height:60px">📋 仓库列表 + 基础统计</div>
+          <span class="label">Step 2 (API)</span>
+        </div>
+        <span style="font-size:2rem;color:var(--neon-cyan)">→</span>
+        <div style="flex:1;text-align:center">
+          <div class="placeholder" style="height:60px;line-height:60px;border:2px dashed #ff00ff">⚡ 选中仓库 → 深度分析</div>
+          <span class="label">Step 3 (Clone+GitLog)</span>
+        </div>
+        <span style="font-size:2rem;color:var(--neon-cyan)">→</span>
+        <div style="flex:1;text-align:center">
+          <div class="placeholder" style="height:60px;line-height:60px">📊 完整提交 / 贡献者图表</div>
+          <span class="label">Step 4</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Gitee 页面布局（新页面）</h3>
+  <div class="mockup">
+    <div class="mockup-header">🖥 GiteeStats 页面 — Cyberpunk 风格</div>
+    <div class="mockup-body">
+      <!-- Search Bar -->
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <div class="mock-input" style="flex:1">输入 Gitee 用户名 或 组织名...</div>
+        <button class="mock-button">⚡ 扫描仓库</button>
+      </div>
+
+      <!-- Repo list from API -->
+      <div style="display:flex;gap:12px;margin-bottom:16px">
+        <div style="flex:2">
+          <div class="label" style="margin-bottom:8px">📦 仓库列表（Gitee API）</div>
+          <div style="border:1px solid rgba(0,245,255,0.2);border-radius:8px;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border-bottom:1px solid rgba(0,245,255,0.1);background:rgba(0,245,255,0.05)">
+              <div><strong>user/awesome-repo</strong><br><span style="font-size:0.75rem;color:#94a3b8">⭐ 152  ·  提交 340  ·  最后更新 2天前</span></div>
+              <button class="mock-button" style="font-size:0.7rem;padding:4px 10px">⚡ 深度分析</button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border-bottom:1px solid rgba(0,245,255,0.1)">
+              <div><strong>user/dotfiles</strong><br><span style="font-size:0.75rem;color:#94a3b8">⭐ 48  ·  提交 120  ·  最后更新 1月前</span></div>
+              <button class="mock-button" style="font-size:0.7rem;padding:4px 10px">⚡ 深度分析</button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px">
+              <div><strong>user/open-source-lib</strong><br><span style="font-size:0.75rem;color:#94a3b8">⭐ 890  ·  提交 2100  ·  最后更新 5小时前</span></div>
+              <button class="mock-button" style="font-size:0.7rem;padding:4px 10px">⚡ 深度分析</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Deep analysis result panel -->
+        <div style="flex:3">
+          <div class="label" style="margin-bottom:8px">📊 深度分析结果（本地 Git）</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="placeholder" style="margin:0">📈 提交趋势图</div>
+            <div class="placeholder" style="margin:0">👥 贡献者排行</div>
+            <div class="placeholder" style="margin:0">📅 提交日历热力图</div>
+            <div class="placeholder" style="margin:0">📉 代码变更统计</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>数据流架构</h3>
+  <div class="mockup">
+    <div class="mockup-header">⚙ 前后端交互</div>
+    <div class="mockup-body">
+      <div style="text-align:center;font-family:monospace;line-height:2">
+        <div>🌐 <strong>Gitee API</strong> ← HTTP → 🐍 <strong>FastAPI 后端</strong> ← REST → 🖥 <strong>Vue 前端</strong></div>
+        <div style="margin-top:12px;font-size:0.85rem;color:#94a3b8">
+          /api/gitee/repos?owner=xxx    →  获取仓库列表（Gitee API）<br>
+          /api/gitee/repos/{repo}/stats  →  获取基础统计（Gitee API）<br>
+          /api/gitee/clone              →  Clone 到本地 + 跑 git log<br>
+          /api/gitee/analyze/{repo}     →  深度分析（复用现有 git log 解析）
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>导航位置</h3>
+  <p class="subtitle">在现有导航栏 "仓库信息" 后面新增 "Gitee" 入口</p>
+  <div class="mock-nav" style="display:flex;justify-content:flex-end;gap:24px">
+    <span>◈ 仪表盘</span>
+    <span>◉ 数据分析</span>
+    <span>⟐ Token分析</span>
+    <span>▤ 仓库信息</span>
+    <span style="color:#ff6600;border-bottom:2px solid #ff6600;">◆ Gitee</span>
+    <span>⚙ 设置</span>
+  </div>
+</div>

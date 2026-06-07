@@ -927,13 +927,159 @@ onUnmounted(() => {
   height: 14px;
 }
 
-.stat-card-ph {
+/* Commit list styles */
+.commit-list {
+  overflow: hidden;
+}
+
+.commit-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+  transition: all 0.3s;
+}
+
+.commit-row:last-child {
+  border-bottom: none;
+}
+
+.commit-row:hover {
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.commit-left {
+  flex-shrink: 0;
+}
+
+.commit-hash {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--neon-magenta, #ff00ff);
+  background: rgba(255, 0, 255, 0.1);
+  border: 1px solid rgba(255, 0, 255, 0.3);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 1px;
+}
+
+.commit-info {
+  min-width: 0;
+}
+
+.commit-message {
+  font-weight: 600;
+  color: #e0e6ff;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 500px;
+}
+
+.commit-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.8rem;
+}
+
+.commit-author {
+  color: #a0aec0;
+}
+
+.commit-repo {
+  background: rgba(0, 245, 255, 0.1);
+  border: 1px solid rgba(0, 245, 255, 0.3);
+  padding: 0.15rem 0.5rem;
+  border-radius: 8px;
+  color: #00f5ff;
+  font-size: 0.75rem;
+}
+
+.commit-time {
+  color: #64748b;
+}
+
+.commit-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-shrink: 0;
+  min-width: 120px;
+}
+
+.change-stats {
+  display: flex;
+  gap: 0.5rem;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.85rem;
+}
+
+.change-additions {
+  color: #00ff88;
+  font-weight: 600;
+}
+
+.change-deletions {
+  color: #ff6b9d;
+  font-weight: 600;
+}
+
+.change-bar {
+  display: flex;
+  height: 8px;
+  width: 80px;
+  border-radius: 4px;
+  background: rgba(0, 212, 255, 0.1);
+  overflow: hidden;
+}
+
+.change-bar-add {
+  background: #00ff88;
+  height: 100%;
+  border-radius: 4px 0 0 4px;
+}
+
+.change-bar-del {
+  background: #ff6b9d;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+}
+
+.commit-row-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 2rem;
+}
+
+.skeleton-bar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.no-commits-hint {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #64748b;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1rem;
+  letter-spacing: 1px;
+}
+
+.stat-ph-skeleton {
   background: rgba(20, 25, 50, 0.6);
   backdrop-filter: blur(20px);
   padding: 2rem;
   border-radius: 16px;
-  text-align: center;
   border: 1px solid rgba(0, 212, 255, 0.2);
+  text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;

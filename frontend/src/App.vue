@@ -103,7 +103,7 @@ const GiteeStats = defineAsyncComponent(() => import('./views/GiteeStats.vue'))
 const componentMap = { dashboard: Dashboard, analytics: Analytics, tokens: TokenAnalytics, repos: RepoSection, gitee: GiteeStats, settings: Settings }
 
 const { t, locale, setLocale } = useI18n()
-const currentView = ref(localStorage.getItem('currentView') || 'dashboard')
+const currentView = ref(localStorage.getItem('currentView') || 'gitee')
 const currentComponent = computed(() => componentMap[currentView.value])
 const scanPath = ref('')
 const version = ref('')
