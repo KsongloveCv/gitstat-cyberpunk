@@ -137,14 +137,20 @@ function skip() {
   }, 400)
 }
 
+function onKeydown() {
+  skip()
+}
+
 onMounted(() => {
   timerId = setTimeout(typeNextChar, 200)
   setTimeout(() => { showSkipHint.value = true }, 1500)
+  window.addEventListener('keydown', onKeydown)
 })
 
 onBeforeUnmount(() => {
   if (timerId) clearTimeout(timerId)
   if (completionTimerId) clearTimeout(completionTimerId)
+  window.removeEventListener('keydown', onKeydown)
 })
 </script>
 

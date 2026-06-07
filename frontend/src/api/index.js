@@ -308,7 +308,7 @@ export async function getTokenStats(range = 'thisWeek', model = 'all') {
   }
 
   const data = await response.json()
-  return data.data
+  return { data: data.data, source: data.source || 'logs' }
 }
 
 export async function getTokenBudget() {

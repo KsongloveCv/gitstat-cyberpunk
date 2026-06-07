@@ -56,6 +56,16 @@
 
     <!-- 有数据 -->
     <template v-else>
+      <div v-if="dataSource === 'demo'" class="demo-banner card">
+        {{ t('token.demoDataHint') }}
+      </div>
+
+      <TokenBudgetAlert :budget-data="budgetData" @updateBudget="handleBudgetUpdate" />
+
+      <TokenEfficiencyCards :efficiency-data="tokenData.efficiency || {}" />
+
+      <TokenComparison :comparison-data="comparisonMapped" />
+
       <!-- 概览卡片 -->
       <div class="overview-grid">
         <div class="overview-card card" :style="{ '--card-color': '#00f5ff' }">
@@ -146,6 +156,8 @@
         </div>
       </div>
 
+      <TokenHeatmapCalendar :heatmap-data="tokenData.heatmapData || []" />
+
       <!-- 输入输出比率雷达图 -->
       <div class="chart-section card">
         <div class="section-header">
@@ -164,10 +176,16 @@ import { useI18n } from '../i18n'
 import * as api from '../api'
 import echarts from '../utils/echarts'
 import { CHART_COLORS, CYBERPUNK_CHART_THEME } from '../utils/constants'
+import TokenEfficiencyCards from '../components/TokenEfficiencyCards.vue'
+import TokenComparison from '../components/TokenComparison.vue'
+import TokenHeatmapCalendar from '../components/TokenHeatmapCalendar.vue'
+import TokenBudgetAlert from '../components/TokenBudgetAlert.vue'
 
 const { t } = useI18n()
 
 const tokenData = ref(null)
+const dataSource = ref('logs')
+const budgetData = ref({ monthlyBudget: 100, currentSpent: 0, percentUsed: 0, isOverBudget: false })
 const loading = ref(true)
 const selectedRange = ref('thisWeek')
 const selectedModel = ref('all')
@@ -205,12 +223,43 @@ function formatCost(n) {
   return n.toFixed(4)
 }
 
+const comparisonMapped = computed(() => {
+  const pc = tokenData.value?.periodComparison
+  if (!pc) return {}
+  return {
+    changePercent: pc.changePercent,
+    currentPeriod: {
+      totalTokens: pc.currentPeriod?.total ?? 0,
+      totalCost: pc.currentPeriod?.cost ?? 0,
+    },
+    previousPeriod: {
+      totalTokens: pc.previousPeriod?.total ?? 0,
+      totalCost: pc.previousPeriod?.cost ?? 0,
+    },
+  }
+})
+
+async function fetchBudget() {
+  try {
+    budgetData.value = await api.getTokenBudget()
+  } catch (err) {
+    console.error('Failed to fetch budget:', err)
+  }
+}
+
+async function handleBudgetUpdate(amount) {
+  await api.setTokenBudget(amount)
+  await fetchBudget()
+}
+
 async function fetchTokenData() {
   loading.value = true
   try {
-    const data = await api.getTokenStats(selectedRange.value, selectedModel.value)
+    const { data, source } = await api.getTokenStats(selectedRange.value, selectedModel.value)
     tokenData.value = data
+    dataSource.value = source
     availableModels.value = data.availableModels || []
+    await fetchBudget()
   } catch (err) {
     console.error('Failed to fetch token stats:', err)
     tokenData.value = null
@@ -421,6 +470,14 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.demo-banner {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(255, 184, 0, 0.4);
+  color: #ffb800;
+  font-size: 0.85rem;
+  text-align: center;
+}
 .token-page {
   max-width: 1200px;
   margin: 0 auto;

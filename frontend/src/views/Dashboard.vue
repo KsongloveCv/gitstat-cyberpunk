@@ -220,6 +220,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from '../i18n'
+import * as api from '../api'
 import { state, fetchOverviewStats, fetchRepoDailyTrend, fetchAuthorRank, loadDashboardS2, fetchCommitList } from '../stores/data'
 import { fetchWeather } from '../stores/weather'
 import StatCard from '../components/StatCard.vue'
@@ -266,7 +267,7 @@ function barWidth(part, total) {
   return Math.max(5, Math.round(part / total * 100)) + '%'
 }
 
-const userEmail = 'ksong666@163.com'
+const userEmail = ref('')
 
 const trendChartRef = ref(null)
 const section2Ref = ref(null)
@@ -366,6 +367,13 @@ function handleResize() {
 }
 
 onMounted(async () => {
+  try {
+    const identity = await api.getUserIdentity()
+    userEmail.value = identity.email || ''
+  } catch {
+    userEmail.value = ''
+  }
+
   // Load weather data with geolocation
   try {
     const pos = await new Promise((resolve, reject) => {
@@ -1139,5 +1147,19 @@ onUnmounted(() => {
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .insight-grid {
+    grid-template-columns: 1fr;
+  }
+  .comparison-table {
+    display: block;
+    overflow-x: auto;
+  }
 }
 </style>
