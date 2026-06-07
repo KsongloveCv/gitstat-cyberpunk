@@ -1,17 +1,23 @@
 """Store — 线程安全的内存仓库存储."""
+import logging
 import threading
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+
+import database
+from config import MAX_COMMITS_PER_REPO
+
+log = logging.getLogger("gitstat.store")
+
 
 class Store:
 
     def __init__(self):
         self._lock = threading.RLock()
         self.scan_path = ""
-        self.repos: dict[str, dict] = {}  # path -> repo_cache
+        self.repos: dict[str, dict] = {}
 
-    # ---- 扫描路径 ----
     def set_scan_path(self, path: str):
         with self._lock:
             self.scan_path = path
@@ -20,14 +26,16 @@ class Store:
         with self._lock:
             return self.scan_path
 
-    # ---- 仓库管理 ----
     def clear_all(self):
         with self._lock:
             self.scan_path = ""
             self.repos.clear()
 
+    def registered_paths(self) -> set[str]:
+        with self._lock:
+            return set(self.repos.keys())
+
     def register_repos(self, repo_list: list[dict]):
-        """注册仓库元数据（未初始化，等待懒加载）。"""
         with self._lock:
             for repo in repo_list:
                 rp = repo["path"]
@@ -51,19 +59,20 @@ class Store:
                     "languages": [],
                 }
 
-    def get_repositories(self) -> list[dict]:
-        """返回所有仓库（含提交数据）。"""
+    def get_repositories(self, include_commits: bool = True) -> list[dict]:
         with self._lock:
             result = []
             for cache in self.repos.values():
-                result.append({
+                item = {
                     "path": cache["path"],
                     "name": cache["name"],
                     "userEmail": cache["userEmail"],
                     "currentBranch": cache["currentBranch"],
                     "lastCommitTime": cache["lastCommitTime"],
-                    "commits": cache["commits"],
-                })
+                }
+                if include_commits:
+                    item["commits"] = cache["commits"]
+                result.append(item)
             return result
 
     def get_repo_cache(self, path: str) -> Optional[dict]:
@@ -75,7 +84,6 @@ class Store:
             return dict(self.repos)
 
     def check_init_range(self, path: str) -> tuple[bool, bool, Optional[datetime], Optional[datetime]]:
-        """返回 (exists, initialized, earliest, latest)。"""
         with self._lock:
             cache = self.repos.get(path)
             if not cache:
@@ -92,9 +100,12 @@ class Store:
                     dates = [c["date"] for c in commits]
                     cache["earliestDate"] = min(dates)
                     cache["latestDate"] = max(dates)
+                try:
+                    database.save_commits(path, commits)
+                except Exception as e:
+                    log.warning("Failed to save commits to DB: %s", e)
 
     def merge_commits(self, path: str, new_commits: list[dict]) -> bool:
-        """增量合并去重，检查上限。"""
         with self._lock:
             cache = self.repos.get(path)
             if not cache:
@@ -106,13 +117,16 @@ class Store:
             if len(cache["commits"]) + len(unique) > MAX_COMMITS_PER_REPO:
                 return False
             cache["commits"].extend(unique)
-            # 更新日期范围
             for c in unique:
                 d = c["date"]
                 if cache["earliestDate"] is None or d < cache["earliestDate"]:
                     cache["earliestDate"] = d
                 if cache["latestDate"] is None or d > cache["latestDate"]:
                     cache["latestDate"] = d
+            try:
+                database.save_commits(path, cache["commits"])
+            except Exception as e:
+                log.warning("Failed to persist merged commits: %s", e)
             return True
 
     def update_repo(self, path: str, **kwargs):
@@ -120,7 +134,10 @@ class Store:
             cache = self.repos.get(path)
             if cache:
                 cache.update(kwargs)
+                try:
+                    database.save_repo_meta(cache)
+                except Exception as e:
+                    log.warning("Failed to save repo meta to DB: %s", e)
 
-store = Store()
 
 store = Store()

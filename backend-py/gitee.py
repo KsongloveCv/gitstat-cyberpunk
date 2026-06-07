@@ -15,6 +15,20 @@ GITEE_API_BASE = "https://gitee.com/api/v5"
 GITEE_CACHE_DIR = Path.home() / ".gitstat-gitee-cache"
 GITEE_ACCESS_TOKEN = __import__("os").environ.get("GITEE_TOKEN", "")
 
+
+def _gitee_request(url: str) -> dict:
+    """调用 Gitee API，Token 通过 Header 传输（不暴露在 URL 中）。"""
+    import urllib.request as ur
+    headers = {
+        "User-Agent": "GitStat/2.0",
+        "Accept": "application/json",
+    }
+    if GITEE_ACCESS_TOKEN:
+        headers["Authorization"] = f"Bearer {GITEE_ACCESS_TOKEN}"
+    req = ur.Request(url, headers=headers)
+    with ur.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
 # Rate limiting
 _rate_bucket: list = []
 
@@ -28,19 +42,10 @@ def _check_rate(max_req=30, window=60):
     _rate_bucket.append(now)
 
 def gitee_api(path: str) -> dict:
-    """调用 Gitee Open API v5，返回 JSON。支持可选的 GITEE_TOKEN 认证。"""
+    """调用 Gitee Open API v5，Token 通过 Header 传输，不暴露在 URL 中。"""
     url = f"{GITEE_API_BASE}{path}"
-    if "?" in path:
-        url += f"&access_token={GITEE_ACCESS_TOKEN}" if GITEE_ACCESS_TOKEN else ""
-    else:
-        url += f"?access_token={GITEE_ACCESS_TOKEN}" if GITEE_ACCESS_TOKEN else ""
     try:
-        req = urllib.request.Request(url, headers={
-            "User-Agent": "GitStat/2.0",
-            "Accept": "application/json",
-        })
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        return _gitee_request(url)
     except Exception as e:
         raise HTTPException(503, f"Gitee API unavailable: {e}")
 

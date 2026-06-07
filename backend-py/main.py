@@ -18,7 +18,16 @@ import urllib.parse
 import logging
 from pathlib import Path
 
-logging.basicConfig(level=logging.WARNING, format='%(levelname)s [%(name)s] %(message)s')
+LOG_DIR = Path.home() / ".gitstat"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(asctime)s %(levelname)s [%(name)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(LOG_DIR / "gitstat.log", encoding="utf-8"),
+    ]
+)
 log = logging.getLogger('gitstat')
 
 # Simple TTL cache for expensive operations
@@ -66,22 +75,22 @@ from git_utils import (
     git_exec, get_git_version, parse_git_log, run_git_log,
     git_log_cache, get_repo_meta, get_remote_url, get_repo_size, EXT_LANG_MAP
 )
-from store import Store, store
-from gitee import gitee_router, gitee_api, gitee_list_repos, gitee_get_repo, clone_gitee_repo, gitee_load_commits
+from store import store
+from gitee import gitee_router, clone_gitee_repo
 from weather import weather_router
+from security import (
+    check_rate_limit, rate_limit_or_429, validate_repo_path, validate_scan_path,
+    validate_gitee_clone_url, safe_static_path, verify_api_key, clamp_limit,
+    ALLOWED_ORIGINS, API_KEY,
+)
+from config import VERSION, MAX_COMMITS_PER_REPO, DEFAULT_HOST, DEFAULT_PORT, FRONTEND_DIST
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  CONFIG
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-VERSION = "2.0.0-py"
-MAX_COMMITS_PER_REPO = 5000
-FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
-
-# Gitee API
-GITEE_API_BASE = "https://gitee.com/api/v5"
+# Gitee cache dir (clone helper in main.py)
 GITEE_CACHE_DIR = Path.home() / ".gitstat-gitee-cache"
-GITEE_ACCESS_TOKEN = os.environ.get("GITEE_TOKEN", "")  # 可选：设置环境变量提高限速
 
 
 def gitee_api(path: str) -> dict:
@@ -189,142 +198,6 @@ def get_git_version() -> str:
     except Exception as e:
         log.warning("Failed to detect git version: %s", e)
         return "git not found"
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  STORE — 线程安全的内存仓库存储
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-class Store:
-    """全局仓库缓存，线程安全。"""
-
-    def __init__(self):
-        self._lock = threading.RLock()
-        self.scan_path = ""
-        self.repos: dict[str, dict] = {}  # path -> repo_cache
-
-    # ---- 扫描路径 ----
-    def set_scan_path(self, path: str):
-        with self._lock:
-            self.scan_path = path
-
-    def get_scan_path(self) -> str:
-        with self._lock:
-            return self.scan_path
-
-    # ---- 仓库管理 ----
-    def clear_all(self):
-        with self._lock:
-            self.scan_path = ""
-            self.repos.clear()
-
-    def register_repos(self, repo_list: list[dict]):
-        """注册仓库元数据（未初始化，等待懒加载）。"""
-        with self._lock:
-            for repo in repo_list:
-                rp = repo["path"]
-                self.repos[rp] = {
-                    "path": rp,
-                    "name": repo.get("name", Path(rp).name),
-                    "userEmail": repo.get("userEmail", ""),
-                    "currentBranch": repo.get("currentBranch", ""),
-                    "lastCommitTime": repo.get("lastCommitTime", ""),
-                    "initialized": False,
-                    "commits": [],
-                    "earliestDate": None,
-                    "latestDate": None,
-                    "branchCount": 0,
-                    "fileCount": 0,
-                    "remoteUrl": "",
-                    "repoSize": 0,
-                    "analyzed": False,
-                    "branches": [],
-                    "totalLines": 0,
-                    "languages": [],
-                }
-
-    def get_repositories(self) -> list[dict]:
-        """返回所有仓库（含提交数据）。"""
-        with self._lock:
-            result = []
-            for cache in self.repos.values():
-                result.append({
-                    "path": cache["path"],
-                    "name": cache["name"],
-                    "userEmail": cache["userEmail"],
-                    "currentBranch": cache["currentBranch"],
-                    "lastCommitTime": cache["lastCommitTime"],
-                    "commits": cache["commits"],
-                })
-            return result
-
-    def get_repo_cache(self, path: str) -> Optional[dict]:
-        with self._lock:
-            return self.repos.get(path)
-
-    def get_all_caches(self) -> dict[str, dict]:
-        with self._lock:
-            return dict(self.repos)
-
-    def check_init_range(self, path: str) -> tuple[bool, bool, Optional[datetime], Optional[datetime]]:
-        """返回 (exists, initialized, earliest, latest)。"""
-        with self._lock:
-            cache = self.repos.get(path)
-            if not cache:
-                return False, False, None, None
-            return True, cache["initialized"], cache["earliestDate"], cache["latestDate"]
-
-    def set_repo_commits(self, path: str, commits: list[dict]):
-        with self._lock:
-            cache = self.repos.get(path)
-            if cache:
-                cache["commits"] = commits
-                cache["initialized"] = True
-                if commits:
-                    dates = [c["date"] for c in commits]
-                    cache["earliestDate"] = min(dates)
-                    cache["latestDate"] = max(dates)
-                # Persist to database
-                try:
-                    database.save_commits(path, commits)
-                except Exception as e:
-                    log.warning("Failed to save commits to DB: %s", e)
-
-    def merge_commits(self, path: str, new_commits: list[dict]) -> bool:
-        """增量合并去重，检查上限。"""
-        with self._lock:
-            cache = self.repos.get(path)
-            if not cache:
-                return False
-            existing = {c["hash"] for c in cache["commits"]}
-            unique = [c for c in new_commits if c["hash"] not in existing]
-            if not unique:
-                return True
-            if len(cache["commits"]) + len(unique) > MAX_COMMITS_PER_REPO:
-                return False
-            cache["commits"].extend(unique)
-            # 更新日期范围
-            for c in unique:
-                d = c["date"]
-                if cache["earliestDate"] is None or d < cache["earliestDate"]:
-                    cache["earliestDate"] = d
-                if cache["latestDate"] is None or d > cache["latestDate"]:
-                    cache["latestDate"] = d
-            return True
-
-    def update_repo(self, path: str, **kwargs):
-        with self._lock:
-            cache = self.repos.get(path)
-            if cache:
-                cache.update(kwargs)
-                # Persist key metadata to database
-                try:
-                    database.save_repo_meta(cache)
-                except Exception as e:
-                    log.warning("Failed to save repo meta to DB: %s", e)
-
-
-store = Store()
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1017,9 +890,12 @@ def parse_time_params(start_date_str: str = "", end_date_str: str = "",
         -> tuple[Optional[datetime], Optional[datetime]]:
     """组合解析时间参数。"""
     if start_date_str and end_date_str:
-        start = datetime.strptime(start_date_str, "%Y-%m-%d")
-        end = datetime.strptime(end_date_str, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
-        return start, end
+        try:
+            start = datetime.strptime(start_date_str, "%Y-%m-%d")
+            end = datetime.strptime(end_date_str, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
+            return start, end
+        except ValueError:
+            raise HTTPException(400, "Invalid date format, use YYYY-MM-DD")
 
     tr = time_range or default_range
     return parse_time_range(tr)
@@ -1039,20 +915,6 @@ def err(code: int, message: str):
     return JSONResponse({"code": code, "message": message}, status_code=code)
 
 
-# Simple in-memory rate limiter
-_rate_store: dict[str, list] = {}
-
-def check_rate_limit(key: str, max_req: int = 60, window: int = 60) -> bool:
-    """窗口内超过 max_req 次返回 False。"""
-    now = time.time()
-    bucket = _rate_store.get(key, [])
-    bucket = [t for t in bucket if now - t < window]
-    if len(bucket) >= max_req:
-        return False
-    bucket.append(now)
-    _rate_store[key] = bucket
-    return True
-
 rate_limited = JSONResponse(
     {"code": 429, "message": "Too many requests"}, status_code=429
 )
@@ -1071,13 +933,36 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=ALLOWED_ORIGINS if not API_KEY else ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def api_key_middleware(request: Request, call_next):
+    if request.url.path.startswith("/api/") and not verify_api_key(request):
+        return JSONResponse({"code": 401, "message": "Invalid API key"}, status_code=401)
+    return await call_next(request)
+
 # Brotli compression middleware
 app.add_middleware(BrotliMiddleware, quality=6)
+
+# Security headers middleware
+@app.middleware("http")
+async def security_headers_mw(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+# Path traversal guard
+def _validate_path(p: str) -> str:
+    resolved = Path(p).resolve()
+    if ".." in p or not resolved.exists():
+        raise HTTPException(400, "Invalid path")
+    return str(resolved)
 
 # Register module routes
 app.include_router(gitee_router)
@@ -1130,11 +1015,12 @@ def api_get_scan_path():
 
 @app.post("/api/scan/path")
 async def api_set_scan_path(request: Request):
+    blocked = rate_limit_or_429("scan_path", 10, 60)
+    if blocked:
+        return blocked
     body = await request.json()
     path = body.get("path", "")
-    if not path:
-        raise HTTPException(400, "Path is required")
-
+    validate_scan_path(path)
     resolved = resolve_scan_path(path)
     store.clear_all()
     database.clear_repo_data()
@@ -1154,10 +1040,38 @@ async def api_set_scan_path(request: Request):
     }
 
 
+@app.post("/api/scan/refresh")
+def api_scan_refresh():
+    """增量刷新：发现新仓库并拉取最新提交，不清空缓存。"""
+    blocked = rate_limit_or_429("scan_refresh", 20, 60)
+    if blocked:
+        return blocked
+    scan_root = store.get_scan_path()
+    if not scan_root:
+        raise HTTPException(400, "No scan path configured")
+    discovered = discover_repos(scan_root)
+    store.register_repos(discovered)
+    now = datetime.now()
+    for repo in discovered:
+        _ensure_repo_loaded(repo["path"], None, now)
+    return {"code": 200, "data": {"repoCount": len(discovered)}, "message": "Refresh complete"}
+
+
+@app.get("/api/user/identity")
+def api_user_identity():
+    """返回当前用户邮箱（从已注册仓库的 git config 聚合）。"""
+    emails = []
+    for cache in store.get_all_caches().values():
+        if cache.get("userEmail"):
+            emails.append(cache["userEmail"])
+    primary = emails[0] if emails else ""
+    return {"code": 200, "data": {"email": primary, "emails": list(dict.fromkeys(emails))}}
+
+
 @app.get("/api/repositories")
-def api_get_repositories():
-    repos = store.get_repositories()
-    return repos
+def api_get_repositories(includeCommits: bool = Query(default=False)):
+    repos = store.get_repositories(include_commits=includeCommits)
+    return {"code": 200, "data": repos}
 
 
 @app.get("/api/repos/list")
@@ -1180,6 +1094,7 @@ def api_get_repos_list():
 
 @app.get("/api/repos/info")
 def api_get_repo_info(path: str = Query(...)):
+    path = validate_repo_path(path, store.registered_paths())
     cache = store.get_repo_cache(path)
     if not cache:
         raise HTTPException(404, "repo not found")
@@ -1211,6 +1126,7 @@ def api_get_repo_info(path: str = Query(...)):
 
 @app.get("/api/repos/stats")
 def api_get_repo_stats(path: str = Query(...)):
+    path = validate_repo_path(path, store.registered_paths())
     cache = store.get_repo_cache(path)
     if not cache:
         raise HTTPException(404, "repo not found")
@@ -1271,6 +1187,10 @@ async def api_repo_analyze(request: Request):
     path = body.get("path", "")
     if not path:
         raise HTTPException(400, "Path is required")
+    blocked = rate_limit_or_429("analyze", 10, 60)
+    if blocked:
+        return blocked
+    path = validate_repo_path(path, store.registered_paths())
 
     cache = store.get_repo_cache(path)
     if cache and cache["analyzed"]:
@@ -1415,13 +1335,35 @@ def api_stats_repo_comparison(
 # ---- 数据导出 ----
 
 @app.post("/api/export/json")
-def api_export():
-    repos = store.get_repositories()
+async def api_export(request: Request):
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    include_commits = body.get("includeCommits", True)
+    repos = store.get_repositories(include_commits=include_commits)
+    payload = {"code": 200, "exportedAt": datetime.now().isoformat(), "repos": repos}
     return Response(
-        content=json.dumps(repos, default=str, ensure_ascii=False),
+        content=json.dumps(payload, default=str, ensure_ascii=False),
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=gitstat-data.json"},
     )
+
+
+@app.get("/api/export/csv")
+def api_export_csv(repos: Optional[str] = Query(None), startDate: str = Query(""), endDate: str = Query("")):
+    """导出提交数据为 CSV 格式。"""
+    import csv, io
+    start, end = parse_time_params(startDate, endDate, "year", "")
+    repo_list = _load_repos(repos.split(",") if repos else None)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["仓库", "作者", "邮箱", "日期", "消息", "新增", "删除", "哈希"])
+    for r in repo_list:
+        for c in _filter_commits(r["commits"], "", start, end):
+            writer.writerow([r["name"], c["author"], c["email"], c["date"].strftime("%Y-%m-%d %H:%M:%S"), c["message"], c["additions"], c["deletions"], c["hash"]])
+    return Response(content=output.getvalue(), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=gitstat-export.csv"})
 
 
 # ---- 提交详情列表 ----
@@ -1434,8 +1376,11 @@ def api_commit_list(
     range: str = "",
     email: str = "",
     limit: int = Query(default=50),
+    offset: int = Query(default=0),
 ):
     """返回指定时间范围内的提交详情列表（按时间倒序）。"""
+    limit = clamp_limit(limit)
+    offset = max(0, offset)
     start, end = parse_time_params(startDate, endDate, range, "today")
     ensure_data_loaded(repo, start)
     repos = _load_repos(repo)
@@ -1457,7 +1402,46 @@ def api_commit_list(
             })
 
     all_commits.sort(key=lambda c: c["date"], reverse=True)
-    return all_commits[:limit]
+    return all_commits[offset: offset + limit]
+
+
+@app.get("/api/stats/commits/search")
+def api_search_commits(
+    q: str = "",
+    repo: str = "",
+    email: str = "",
+    limit: int = Query(default=50),
+    offset: int = Query(default=0),
+):
+    """在 SQLite 缓存中搜索提交记录。"""
+    return {
+        "code": 200,
+        "data": database.search_commits(
+            query=q, repo_path=repo, email=email,
+            limit=clamp_limit(limit), offset=max(0, offset),
+        ),
+    }
+
+
+@app.get("/api/stats/summary")
+def api_stats_summary(range: str = Query(default="week")):
+    """CI/脚本友好的简要统计摘要。"""
+    start, end = parse_time_params("", "", range, "week")
+    ensure_data_loaded([], start)
+    repos = _load_repos([])
+    user = _resolve_user_email(repos, "")
+    overview = aggregate_overview(repos, user, start, end)
+    return {
+        "code": 200,
+        "data": {
+            "range": range,
+            "totalCommits": overview.get("totalCommits", 0),
+            "totalAdditions": overview.get("totalAdditions", 0),
+            "totalDeletions": overview.get("totalDeletions", 0),
+            "repositoryCount": overview.get("repositoryCount", 0),
+            "activeAuthors": overview.get("activeAuthors", 0),
+        },
+    }
 
 
 # ---- 版本 + 健康检查 ----
@@ -1470,139 +1454,6 @@ def api_version():
 @app.get("/health")
 def api_health():
     return "OK"
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  WEATHER — 天气数据代理（Open-Meteo API）
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-WMO_WEATHER_CODE = {
-    0: {"zh": "晴", "en": "Clear", "icon": "clear"},
-    1: {"zh": "大部晴朗", "en": "Mainly clear", "icon": "mostly-clear"},
-    2: {"zh": "多云", "en": "Partly cloudy", "icon": "partly-cloudy"},
-    3: {"zh": "阴", "en": "Overcast", "icon": "overcast"},
-    45: {"zh": "雾", "en": "Fog", "icon": "fog"},
-    48: {"zh": "冻雾", "en": "Depositing rime fog", "icon": "fog"},
-    51: {"zh": "小毛毛雨", "en": "Light drizzle", "icon": "drizzle"},
-    53: {"zh": "毛毛雨", "en": "Moderate drizzle", "icon": "drizzle"},
-    55: {"zh": "大毛毛雨", "en": "Dense drizzle", "icon": "drizzle"},
-    56: {"zh": "冻毛毛雨", "en": "Light freezing drizzle", "icon": "drizzle"},
-    57: {"zh": "冻毛毛雨", "en": "Dense freezing drizzle", "icon": "drizzle"},
-    61: {"zh": "小雨", "en": "Slight rain", "icon": "rain"},
-    63: {"zh": "中雨", "en": "Moderate rain", "icon": "rain"},
-    65: {"zh": "大雨", "en": "Heavy rain", "icon": "rain"},
-    66: {"zh": "冻雨", "en": "Light freezing rain", "icon": "rain"},
-    67: {"zh": "冻雨", "en": "Heavy freezing rain", "icon": "rain"},
-    71: {"zh": "小雪", "en": "Slight snow fall", "icon": "snow"},
-    73: {"zh": "中雪", "en": "Moderate snow fall", "icon": "snow"},
-    75: {"zh": "大雪", "en": "Heavy snow fall", "icon": "snow"},
-    77: {"zh": "雪粒", "en": "Snow grains", "icon": "snow"},
-    80: {"zh": "小阵雨", "en": "Slight rain showers", "icon": "rain"},
-    81: {"zh": "中阵雨", "en": "Moderate rain showers", "icon": "rain"},
-    82: {"zh": "大阵雨", "en": "Violent rain showers", "icon": "rain"},
-    85: {"zh": "小阵雪", "en": "Slight snow showers", "icon": "snow"},
-    86: {"zh": "大阵雪", "en": "Heavy snow showers", "icon": "snow"},
-    95: {"zh": "雷暴", "en": "Thunderstorm", "icon": "thunderstorm"},
-    96: {"zh": "雷暴+小冰雹", "en": "Thunderstorm with slight hail", "icon": "thunderstorm"},
-    99: {"zh": "雷暴+大冰雹", "en": "Thunderstorm with heavy hail", "icon": "thunderstorm"},
-}
-
-OPEN_METEO_BASE = "https://api.open-meteo.com/v1/forecast"
-
-
-def _fetch_open_meteo(params: dict) -> dict:
-    """调用 Open-Meteo API 并返回 JSON。"""
-    url = OPEN_METEO_BASE + "?" + urllib.parse.urlencode(params)
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "GitStat/2.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except Exception as e:
-        log.warning("Open-Meteo API error: %s", e)
-        return {}
-
-
-def _weather_desc(code: int, lang: str = "zh") -> str:
-    info = WMO_WEATHER_CODE.get(code, {"zh": "未知", "en": "Unknown", "icon": "unknown"})
-    return info.get(lang, info["en"])
-
-
-def _weather_icon(code: int) -> str:
-    info = WMO_WEATHER_CODE.get(code, {"icon": "unknown"})
-    return info["icon"]
-
-
-@app.get("/api/weather/current")
-def api_weather_current(lat: float = Query(...), lon: float = Query(...)):
-    """获取当前天气（代理 Open-Meteo）。"""
-    data = _fetch_open_meteo({
-        "latitude": lat,
-        "longitude": lon,
-        "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,apparent_temperature",
-        "timezone": "auto",
-    })
-    if not data or "current" not in data:
-        raise HTTPException(503, "Weather API unavailable")
-
-    cur = data["current"]
-    tz = data.get("timezone", "")
-    tz_name = tz.replace("Asia/", "").replace("Europe/", "").replace("America/", "") if tz else ""
-
-    return {
-        "code": 200,
-        "data": {
-            "temperature": cur.get("temperature_2m"),
-            "apparentTemperature": cur.get("apparent_temperature"),
-            "humidity": cur.get("relative_humidity_2m"),
-            "windSpeed": cur.get("wind_speed_10m"),
-            "weatherCode": cur.get("weather_code"),
-            "descriptionZh": _weather_desc(cur.get("weather_code", 0), "zh"),
-            "descriptionEn": _weather_desc(cur.get("weather_code", 0), "en"),
-            "icon": _weather_icon(cur.get("weather_code", 0)),
-            "timezone": tz,
-            "locationName": tz_name,
-            "units": data.get("current_units", {}),
-        },
-    }
-
-
-@app.get("/api/weather/forecast")
-def api_weather_forecast(lat: float = Query(...), lon: float = Query(...), days: int = Query(default=7)):
-    """获取未来几天天气预报（代理 Open-Meteo）。"""
-    data = _fetch_open_meteo({
-        "latitude": lat,
-        "longitude": lon,
-        "daily": "weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,precipitation_sum,wind_speed_10m_max",
-        "timezone": "auto",
-        "forecast_days": min(days, 7),
-    })
-    if not data or "daily" not in data:
-        raise HTTPException(503, "Weather API unavailable")
-
-    daily = data["daily"]
-    forecast = []
-    for i in range(len(daily.get("time", []))):
-        entry = {
-            "date": daily["time"][i],
-            "weatherCode": daily.get("weather_code", [])[i] if i < len(daily.get("weather_code", [])) else 0,
-            "temperatureMax": daily.get("temperature_2m_max", [])[i] if i < len(daily.get("temperature_2m_max", [])) else None,
-            "temperatureMin": daily.get("temperature_2m_min", [])[i] if i < len(daily.get("temperature_2m_min", [])) else None,
-            "apparentTemperatureMax": daily.get("apparent_temperature_max", [])[i] if i < len(daily.get("apparent_temperature_max", [])) else None,
-            "apparentTemperatureMin": daily.get("apparent_temperature_min", [])[i] if i < len(daily.get("apparent_temperature_min", [])) else None,
-            "sunrise": daily.get("sunrise", [])[i] if i < len(daily.get("sunrise", [])) else "",
-            "sunset": daily.get("sunset", [])[i] if i < len(daily.get("sunset", [])) else "",
-            "precipitation": daily.get("precipitation_sum", [])[i] if i < len(daily.get("precipitation_sum", [])) else 0,
-            "windSpeedMax": daily.get("wind_speed_10m_max", [])[i] if i < len(daily.get("wind_speed_10m_max", [])) else None,
-            "descriptionZh": _weather_desc(daily.get("weather_code", [0])[i] if i < len(daily.get("weather_code", [])) else 0, "zh"),
-            "descriptionEn": _weather_desc(daily.get("weather_code", [0])[i] if i < len(daily.get("weather_code", [])) else 0, "en"),
-            "icon": _weather_icon(daily.get("weather_code", [0])[i] if i < len(daily.get("weather_code", [])) else 0),
-        }
-        forecast.append(entry)
-
-    return {
-        "code": 200,
-        "data": forecast,
-    }
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1997,8 +1848,9 @@ async def token_stats(
     """Token 消耗统计 API。"""
     scan_dir = store.scan_path or os.getcwd()
     records = _parse_token_log(scan_dir)
+    source = "logs" if records else "demo"
     result = _aggregate_token_stats(records, range, model)
-    return JSONResponse({"data": result})
+    return JSONResponse({"data": result, "source": source})
 
 
 
@@ -2059,7 +1911,7 @@ def _calc_streak(repo_list: list, repos_filter: Optional[list] = None) -> dict:
     daily_map: dict[str, int] = {}  # date_str → total_commits
 
     for repo in repo_list:
-        if repos_filter and repo["repoName"] not in repos_filter:
+        if repos_filter and repo.get("repoPath") not in repos_filter and repo.get("repoName") not in repos_filter:
             continue
         for author in (repo.get("authors") or []):
             for day in (author.get("dailyData") or []):
@@ -2161,159 +2013,21 @@ async def streak_stats(
     if repo:
         repos_filter = [repo]
 
-    # 获取较长时间范围的 daily 数据来计算 streak（最近60天）
-    repo_list = aggregator.aggregate_daily(
-        repos_filter=repos_filter,
-        time_range="year",  # 用年范围确保覆盖足够数据
-        start_date=None,
-        end_date=None,
-    )
-
+    start, end = parse_time_range("year")
+    repo_paths = repos_filter if repos_filter else []
+    ensure_data_loaded(repo_paths, start)
+    repos = _load_repos(repo_paths)
+    user = _resolve_user_email(repos, "")
+    repo_list = aggregate_daily_stats(repos, user, start, end)
     result = _calc_streak(repo_list, repos_filter)
     return JSONResponse({"data": result})
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  GITEE — 码云代码统计 API Routes
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-@app.get("/api/gitee/repos")
-def api_gitee_list_repos(
-    owner: str = Query(..., description="Gitee 用户名或组织名"),
-    page: int = Query(default=1),
-    perPage: int = Query(default=30),
-):
-    """代理 Gitee API：获取某用户/组织的仓库列表。"""
-    if not owner or not re.match(r'^[a-zA-Z0-9_-]+$', owner):
-        raise HTTPException(400, "Invalid owner name")
-    try:
-        repos = gitee_list_repos(owner, page, perPage)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(502, f"Gitee API error: {e}")
-    return {"code": 200, "data": repos}
-
-
-@app.get("/api/gitee/repos/info")
-def api_gitee_repo_info(
-    owner: str = Query(...),
-    repo: str = Query(...),
-):
-    """获取单个 Gitee 仓库详情。"""
-    try:
-        info = gitee_get_repo(owner, repo)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(502, f"Gitee API error: {e}")
-    return {"code": 200, "data": info}
-
-
-@app.post("/api/gitee/repos/clone")
-async def api_gitee_clone(request: Request):
-    """Clone Gitee 仓库到本地缓存，注册到 Store，返回基础提交统计。"""
-    body = await request.json()
-    owner = body.get("owner", "")
-    repo_name = body.get("repo", "")
-    clone_url = body.get("cloneUrl", "")
-
-    if not clone_url and owner and repo_name:
-        clone_url = f"https://gitee.com/{owner}/{repo_name}.git"
-    if not clone_url:
-        raise HTTPException(400, "cloneUrl is required")
-
-    # Extract owner/repo from clone_url if not provided
-    if not owner or not repo_name:
-        m = re.search(r'gitee\.com/([^/]+)/([^/]+?)(?:\.git)?$', clone_url)
-        if m:
-            owner, repo_name = m.group(1), m.group(2)
-        else:
-            owner, repo_name = "unknown", clone_url.split("/")[-1].replace(".git", "")
-
-    # Clone to cache
-    clone_result = clone_gitee_repo(clone_url, owner, repo_name)
-    local_path = clone_result["path"]
-
-    # Parse git log
-    commits = run_git_log(local_path)
-
-    # Register in Store so existing stats APIs work
-    repo_meta = get_repo_meta(local_path)
-    store.register_repos([{
-        "path": local_path,
-        "name": f"[Gitee] {owner}/{repo_name}",
-        "userEmail": "",
-        "currentBranch": repo_meta.get("currentBranch", "master"),
-        "lastCommitTime": repo_meta.get("lastCommitTime", ""),
-    }])
-    store.set_repo_commits(local_path, commits)
-
-    return {
-        "code": 200,
-        "data": {
-            "path": local_path,
-            "name": f"{owner}/{repo_name}",
-            "commitCount": len(commits),
-            "cloneUrl": clone_url,
-        },
-        "message": "Clone and parse complete",
-    }
-
-
-@app.post("/api/gitee/repos/analyze")
-async def api_gitee_analyze(request: Request):
-    """对已 clone 的 Gitee 仓库进行深度分析（复用现有逻辑）。"""
-    body = await request.json()
-    path = body.get("path", "")
-    if not path:
-        raise HTTPException(400, "path is required")
-
-    cache = store.get_repo_cache(path)
-    if not cache:
-        raise HTTPException(404, "Repo not found. Clone first.")
-
-    if cache.get("analyzed"):
-        return {
-            "name": cache["name"], "path": cache["path"],
-            "branchCount": cache["branchCount"], "branches": cache["branches"],
-            "fileCount": cache["fileCount"], "totalLines": cache["totalLines"],
-            "languages": cache["languages"],
-        }
-
-    result = analyze_repo_deep(path)
-    store.update_repo(
-        path,
-        branchCount=result["branchCount"],
-        branches=result["branches"],
-        fileCount=result["fileCount"],
-        totalLines=result["totalLines"],
-        languages=result["languages"],
-        analyzed=True,
-    )
-    return result
-
-
-@app.post("/api/gitee/repos/remove")
-async def api_gitee_remove(request: Request):
-    """从 Store 中移除已加载的 Gitee 仓库（不删除本地缓存文件）。"""
-    body = await request.json()
-    path = body.get("path", "")
-    if not path:
-        raise HTTPException(400, "path is required")
-    cache = store.get_repo_cache(path)
-    if cache:
-        cache["initialized"] = False
-        cache["commits"] = []
-        cache["analyzed"] = False
-    return {"code": 200, "message": "Repo removed from memory"}
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  STATIC FILES — 前端 SPA
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-_frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
+_frontend_dist = FRONTEND_DIST
 _has_static = _frontend_dist.exists() and (_frontend_dist / "index.html").exists()
 
 _MIME_MAP = {
@@ -2330,8 +2044,8 @@ if _has_static:
     async def serve_spa(full_path: str):
         # 如果路径匹配已有 API 路由，FastAPI 不会走到这里
         # 安全兜底：尝试作为静态文件返回
-        file_path = _frontend_dist / full_path
-        if file_path.exists() and file_path.is_file():
+        file_path = safe_static_path(_frontend_dist, full_path)
+        if file_path:
             ext = file_path.suffix.lower()
             media = _MIME_MAP.get(ext, "application/octet-stream")
             return FileResponse(file_path, media_type=media)
@@ -2374,8 +2088,10 @@ if __name__ == "__main__":
     )
     parser.add_argument("scan_path", nargs="?", default=os.getcwd(),
                         help="Git 仓库扫描目录（默认: 当前目录）")
-    parser.add_argument("--port", type=int, default=12580,
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT,
                         help="监听端口（默认: 12580）")
+    parser.add_argument("--host", type=str, default=DEFAULT_HOST,
+                        help="监听地址（默认: 127.0.0.1，远程访问用 0.0.0.0）")
     parser.add_argument("--no-browser", action="store_true",
                         help="不自动打开浏览器")
     args = parser.parse_args()
@@ -2432,4 +2148,4 @@ if __name__ == "__main__":
     if not args.no_browser:
         open_browser(url)
 
-    uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="warning")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")

@@ -2,7 +2,9 @@
 from pathlib import Path
 import os
 
-VERSION = "2.1.0-py"
+VERSION = "2.2.0-py"
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 12580
 MAX_COMMITS_PER_REPO = 5000
 FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 

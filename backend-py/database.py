@@ -154,6 +154,39 @@ def load_commits(repo_path: str) -> list[dict]:
         return commits
 
 
+def search_commits(
+    query: str = "",
+    repo_path: str = "",
+    email: str = "",
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    """Search commits in SQLite cache."""
+    sql = "SELECT hash, repo_path, author, email, date, message, additions, deletions FROM commits WHERE 1=1"
+    params: list = []
+    if repo_path:
+        sql += " AND repo_path=?"
+        params.append(repo_path)
+    if email:
+        sql += " AND email=?"
+        params.append(email)
+    if query:
+        sql += " AND (message LIKE ? OR hash LIKE ? OR author LIKE ?)"
+        like = f"%{query}%"
+        params.extend([like, like, like])
+    sql += " ORDER BY date DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+    with _lock, _get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    results = []
+    for r in rows:
+        results.append({
+            "hash": r[0], "repoPath": r[1], "author": r[2], "email": r[3],
+            "date": r[4], "message": r[5], "additions": r[6], "deletions": r[7],
+        })
+    return results
+
+
 def clear_repo_data():
     """Clear cached repos and commits; keep scan_state."""
     with _lock, _get_conn() as conn:

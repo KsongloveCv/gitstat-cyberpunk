@@ -54,18 +54,37 @@ export async function getOverviewStats(startDate = null, endDate = null, repos =
   return response.json()
 }
 
-export async function getRepositories() {
-  const response = await fetch(`${API_BASE}/repositories`)
+export async function getRepositories(includeCommits = false) {
+  const params = includeCommits ? '?includeCommits=true' : ''
+  const response = await fetch(`${API_BASE}/repositories${params}`)
   
   if (!response.ok) {
     throw new Error('Failed to fetch repositories')
   }
   
+  const data = await response.json()
+  return data.data ?? data
+}
+
+export async function getUserIdentity() {
+  const response = await fetch(`${API_BASE}/user/identity`)
+  if (!response.ok) throw new Error('Failed to fetch user identity')
+  const data = await response.json()
+  return data.data
+}
+
+export async function refreshScan() {
+  const response = await fetch(`${API_BASE}/scan/refresh`, { method: 'POST' })
+  if (!response.ok) throw new Error('Refresh failed')
   return response.json()
 }
 
-export async function exportData() {
-  const response = await fetch(`${API_BASE}/export/json`)
+export async function exportData(includeCommits = true) {
+  const response = await fetch(`${API_BASE}/export/json`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ includeCommits }),
+  })
   
   if (!response.ok) {
     throw new Error('Export failed')
@@ -259,6 +278,21 @@ export async function getVersion() {
   
   const data = await response.json()
   return data.version
+}
+
+export async function searchCommits(q = '', limit = 50, offset = 0) {
+  const params = new URLSearchParams({ q, limit, offset })
+  const response = await fetch(`${API_BASE}/stats/commits/search?${params}`)
+  if (!response.ok) throw new Error('Search failed')
+  const data = await response.json()
+  return data.data
+}
+
+export async function getStatsSummary(range = 'week') {
+  const response = await fetch(`${API_BASE}/stats/summary?range=${range}`)
+  if (!response.ok) throw new Error('Failed to fetch summary')
+  const data = await response.json()
+  return data.data
 }
 
 export async function getTokenStats(range = 'thisWeek', model = 'all') {

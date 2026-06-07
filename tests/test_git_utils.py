@@ -56,3 +56,48 @@ def test_ttl_cache_clear():
     git_log_cache.set("key2", "value")
     git_log_cache.clear()
     assert git_log_cache.get("key2") is None
+
+
+def test_parse_single_commit_additions():
+    log = """---GITSTAT_COMMIT---
+aaa11111
+U
+u@e.com
+2024-03-01 09:00:00 +0800
+only add
+3\t0
+"""
+    commits = parse_git_log(log)
+    assert commits[0]["additions"] == 3
+    assert commits[0]["deletions"] == 0
+
+
+def test_parse_commit_multiline_message():
+    log = """---GITSTAT_COMMIT---
+bbb22222
+U
+u@e.com
+2024-03-02 09:00:00 +0800
+line1
+line2
+1\t1
+"""
+    commits = parse_git_log(log)
+    assert "line1" in commits[0]["message"]
+
+
+def test_parse_commit_deletions_only():
+    log = """---GITSTAT_COMMIT---
+ccc33333
+U
+u@e.com
+2024-03-03 09:00:00 +0800
+remove
+0\t4
+"""
+    commits = parse_git_log(log)
+    assert commits[0]["deletions"] == 4
+
+
+def test_parse_whitespace_log():
+    assert parse_git_log("   \n\t  ") == []
