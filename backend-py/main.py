@@ -20,6 +20,35 @@ from pathlib import Path
 
 logging.basicConfig(level=logging.WARNING, format='%(levelname)s [%(name)s] %(message)s')
 log = logging.getLogger('gitstat')
+
+# Simple TTL cache for expensive operations
+class TTLCache:
+    """Thread-safe TTL cache with dict interface."""
+
+    def __init__(self, ttl_seconds: float = 300):
+        self._ttl = ttl_seconds
+        self._data: dict[str, tuple[float, any]] = {}
+        self._lock = threading.Lock()
+
+    def get(self, key: str):
+        with self._lock:
+            entry = self._data.get(key)
+            if entry:
+                ts, val = entry
+                if time.time() - ts < self._ttl:
+                    return val
+                del self._data[key]
+            return None
+
+    def set(self, key: str, value: any):
+        with self._lock:
+            self._data[key] = (time.time(), value)
+
+    def clear(self):
+        with self._lock:
+            self._data.clear()
+
+git_log_cache = TTLCache(ttl_seconds=300)  # 5 min cache for git log results
 from datetime import datetime, timedelta, date
 from typing import Optional
 from collections import defaultdict
@@ -395,8 +424,14 @@ def parse_git_log(text: str) -> list[dict]:
 
 
 def run_git_log(repo_path: str, since: Optional[datetime] = None,
-                until: Optional[datetime] = None) -> list[dict]:
-    """在仓库中运行 git log 并返回解析后的 commit 列表。"""
+                until: Optional[datetime] = None, use_cache: bool = True) -> list[dict]:
+    """在仓库中运行 git log 并返回解析后的 commit 列表（带 TTL 缓存）。"""
+    cache_key = f"{repo_path}:{since}:{until}"
+    if use_cache:
+        cached = git_log_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
     args = ["log", "--format=---GITSTAT_COMMIT---%n%H%n%an%n%ae%n%ci%n%s", "--numstat"]
     if since:
         args.append(f"--since={since.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -406,6 +441,10 @@ def run_git_log(repo_path: str, since: Optional[datetime] = None,
     output = git_exec(repo_path, *args)
     if not output:
         return []
+    result = parse_git_log(output)
+    if use_cache:
+        git_log_cache.set(cache_key, result)
+    return result
     return parse_git_log(output)
 
 

@@ -149,6 +149,12 @@
             </button>
           </div>
         </div>
+        <div v-if="hasMore" class="load-more-wrap">
+          <button class="load-more-btn" :disabled="loadingMore" @click="loadMore">
+            <span v-if="!loadingMore">加载更多仓库</span>
+            <span v-else>加载中...</span>
+          </button>
+        </div>
       </div>
 
       <!-- ── Right: Analysis Panel ── -->
@@ -254,6 +260,9 @@ const ownerName = ref('')
 const loading = ref(false)
 const hasScanned = ref(false)
 const repos = ref([])
+const currentPage = ref(1)
+const hasMore = ref(false)
+const loadingMore = ref(false)
 const analyzingPath = ref('')
 const analyzingRepoPath = ref('')
 const cachedRepos = reactive([])
@@ -271,8 +280,10 @@ async function scanRepos() {
 
   loading.value = true
   hasScanned.value = true
+  currentPage.value = 1
   try {
-    repos.value = await api.getGiteeRepos(owner)
+    repos.value = await api.getGiteeRepos(owner, 1, 30)
+    hasMore.value = repos.value.length === 30
   } catch (err) {
     console.error('Scan Gitee repos failed:', err)
     repos.value = []
@@ -281,7 +292,32 @@ async function scanRepos() {
   }
 }
 
+async function loadMore() {
+  const owner = ownerName.value.trim()
+  if (!owner || loadingMore.value) return
+  loadingMore.value = true
+  try {
+    const nextPage = currentPage.value + 1
+    const more = await api.getGiteeRepos(owner, nextPage, 30)
+    if (more.length > 0) {
+      repos.value.push(...more)
+      currentPage.value = nextPage
+      hasMore.value = more.length === 30
+    } else {
+      hasMore.value = false
+    }
+  } catch (err) {
+    console.error('Load more failed:', err)
+  } finally {
+    loadingMore.value = false
+  }
+}
+
 async function cloneAndAnalyze(repo) {
+  // Guard: skip if already cloned
+  if (cachedRepos.some(cr => cr.cloneUrl === repo.cloneUrl)) {
+    return
+  }
   analyzingPath.value = repo.cloneUrl
   try {
     const result = await api.cloneGiteeRepo(
@@ -800,6 +836,27 @@ function formatDate(dateStr) {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.load-more-wrap {
+  text-align: center;
+  margin-top: 0.75rem;
+}
+.load-more-btn {
+  padding: 0.5rem 2rem;
+  background: rgba(0, 245, 255, 0.06);
+  border: 1px solid rgba(0, 245, 255, 0.2);
+  border-radius: 6px;
+  color: var(--neon-cyan);
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.8rem;
+  transition: all 0.3s;
+}
+.load-more-btn:hover:not(:disabled) {
+  background: rgba(0, 245, 255, 0.12);
+  box-shadow: 0 0 12px rgba(0, 245, 255, 0.1);
+}
+.load-more-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── Analysis Panel ── */
 .cached-repo {

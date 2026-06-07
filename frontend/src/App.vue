@@ -167,6 +167,27 @@ function toggleLanguage() {
 }
 </script>
 
+<!-- Global design tokens -->
+<style>
+:root {
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-dim: #475569;
+  --border-dim: rgba(0, 245, 255, 0.1);
+  --border-strong: rgba(0, 245, 255, 0.3);
+  --bg-panel: rgba(12, 18, 40, 0.7);
+  --bg-card: rgba(0, 245, 255, 0.03);
+  --bg-hover: rgba(0, 245, 255, 0.05);
+  --accent-green: #00ff88;
+  --accent-gold: #ffd700;
+  --accent-red: #ef4444;
+  --accent-purple: #a78bfa;
+  --font-mono: 'Share Tech Mono', monospace;
+  --font-display: 'Orbitron', sans-serif;
+}
+</style>
+
 <style scoped>
 .app {
   min-height: 100vh;
