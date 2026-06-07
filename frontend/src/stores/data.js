@@ -18,7 +18,8 @@ export const state = reactive({
   weatherCurrent: null,
   weatherForecast: [],
   weatherLoading: false,
-  weatherCoords: null
+  weatherCoords: null,
+  commitList: []
 })
 
 export async function performScan(path, timeRange) {
@@ -171,6 +172,14 @@ export async function loadScanPath() {
     state.scanPath = info.path
   } catch (err) {
     console.error('Failed to load scan path:', err)
+  }
+}
+
+export async function fetchCommitList(range = 'today', repos = []) {
+  try {
+    state.commitList = await api.getCommitList(range, repos)
+  } catch (err) {
+    console.error('Failed to fetch commit list:', err)
   }
 }
 

@@ -59,6 +59,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
+# Import from refactored modules
+from git_utils import (
+    git_exec, get_git_version, parse_git_log, run_git_log,
+    git_log_cache, get_repo_meta, get_remote_url, get_repo_size, EXT_LANG_MAP
+)
+from store import Store, store
+from gitee import gitee_router, gitee_api, gitee_list_repos, gitee_get_repo, clone_gitee_repo, gitee_load_commits
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  CONFIG
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1004,6 +1012,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register Gitee module routes
+app.include_router(gitee_router)
 
 
 def _load_repos(repo_paths: list[str] = None) -> list[dict]:
