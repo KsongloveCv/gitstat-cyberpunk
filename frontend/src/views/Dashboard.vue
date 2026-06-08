@@ -416,7 +416,7 @@ onMounted(async () => {
     fetchWeather(pos.coords.latitude, pos.coords.longitude)
   } catch {
     // Fallback to Shanghai coordinates
-    fetchWeather(31.23, 121.47)
+    fetchWeather(34.34, 108.94)  // 西安
   }
 
   await Promise.all([

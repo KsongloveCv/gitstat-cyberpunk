@@ -9,6 +9,26 @@ from config import OPEN_METEO_BASE
 log = logging.getLogger("gitstat.weather")
 weather_router = APIRouter(prefix="/api/weather", tags=["weather"])
 
+# Chinese city coordinate lookup
+_CITY_LOOKUP = [
+    (34.34, 108.94, "西安"), (39.90, 116.40, "北京"), (31.23, 121.47, "上海"),
+    (23.13, 113.26, "广州"), (22.54, 114.06, "深圳"), (30.57, 104.07, "成都"),
+    (30.25, 120.17, "杭州"), (29.56, 106.55, "重庆"), (32.06, 118.79, "南京"),
+    (36.07, 120.38, "青岛"), (28.23, 112.94, "长沙"), (30.59, 114.31, "武汉"),
+    (25.04, 102.72, "昆明"), (29.65, 91.13, "拉萨"), (43.82, 87.62, "乌鲁木齐"),
+    (45.80, 126.53, "哈尔滨"), (41.80, 123.43, "沈阳"),
+]
+
+
+def _resolve_city(lat: float, lon: float) -> str:
+    best, best_dist = "", float("inf")
+    for clat, clon, cname in _CITY_LOOKUP:
+        dist = (lat - clat) ** 2 + (lon - clon) ** 2
+        if dist < best_dist:
+            best_dist, best = dist, cname
+    return best if best_dist < 1.5 else ""
+
+
 WMO_WEATHER_CODE = {
     0: {"zh": "晴", "en": "Clear", "icon": "clear"},
     1: {"zh": "大部晴朗", "en": "Mainly clear", "icon": "mostly-clear"},
@@ -58,7 +78,7 @@ def api_weather_current(lat: float = Query(...), lon: float = Query(...)):
         raise HTTPException(503, "Weather API unavailable")
     cur = data["current"]
     tz = data.get("timezone", "")
-    tz_name = tz.replace("Asia/", "").replace("Europe/", "").replace("America/", "") if tz else ""
+    tz_name = _resolve_city(lat, lon) or tz.replace("Asia/", "").replace("Europe/", "").replace("America/", "") if tz else ""
     return {
         "code": 200,
         "data": {
