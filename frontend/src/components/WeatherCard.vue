@@ -37,7 +37,12 @@
           </div>
         </div>
         <div class="current-right">
-          <div class="location-name">{{ weatherCurrent.locationName }}</div>
+          <div class="location-row">
+            <span class="location-pin">📍</span>
+            <span class="location-name">{{ weatherCurrent.locationName }}</span>
+            <span class="location-tz">{{ weatherCurrent.timezone }}</span>
+          </div>
+          <div class="weather-date">{{ todayDate }}</div>
           <div class="detail-grid">
             <div class="detail-item">
               <span class="detail-label">{{ t('weather.feelsLike') }}</span>
@@ -95,6 +100,12 @@ const weatherCurrent = computed(() => weatherState.current)
 const weatherForecast = computed(() => weatherState.forecast)
 const weatherLoading = computed(() => weatherState.loading)
 const weatherError = computed(() => weatherState.error && !weatherCurrent.value)
+
+const todayDate = computed(() => {
+  const d = new Date()
+  const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${days[d.getDay()]}`
+})
 
 function getWeatherEmoji(icon) {
   return WEATHER_EMOJI_MAP[icon] || WEATHER_EMOJI_MAP.unknown
@@ -276,13 +287,35 @@ function getDayName(dateStr, idx) {
   gap: 0.5rem;
 }
 
+.location-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.3rem;
+}
+.location-pin { font-size: 0.9rem; }
 .location-name {
   font-family: 'Orbitron', sans-serif;
-  font-size: 0.8rem;
-  color: var(--neon-magenta, #ff00ff);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  opacity: 0.8;
+  font-size: 0.85rem;
+  color: #e2e8f0;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+.location-tz {
+  font-size: 0.55rem;
+  color: #475569;
+  font-family: 'Share Tech Mono', monospace;
+  background: rgba(0, 245, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 245, 255, 0.1);
+}
+.weather-date {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.7rem;
+  color: #64748b;
+  margin-bottom: 0.6rem;
+  letter-spacing: 0.5px;
 }
 
 .detail-grid {
