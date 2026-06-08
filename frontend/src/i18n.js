@@ -488,6 +488,18 @@ const messages = {
       totalDeletions: 'Deletions',
       activeAuthors: 'Active Authors'
     }
+  },
+  ja: {
+    nav: { dashboard: 'ダッシュボード', analytics: '分析', tokens: 'トークン', repos: 'リポジトリ', settings: '設定', github: 'GitHub', gitee: 'Gitee' },
+    dashboard: { todayCommits: '今日のコミット', todayAdditions: '追加行', todayDeletions: '削除行', activeAuthors: 'アクティブ作者', repositoryCount: 'リポジトリ数', weeklyTotal: '週間合計', repoComparison: 'リポジトリ比較', weeklyTrend: '週間トレンド', authorRank: '作者ランキング', lastCommit: '最終コミット', author: '作者', commits: 'コミット', changes: '変更', me: '自分', noTodayCommits: '本日のコミットなし' },
+    analytics: { title: 'データ分析', noData: 'データなし', additions: '追加', deletions: '削除', developer: '開発者' },
+    weather: { current: '現在の天気', forecast: '7日間予報', humidity: '湿度', wind: '風速', feelsLike: '体感温度', loading: '読込中...', unavailable: '天気データなし', today: '今日', unitC: '°C', unitKmh: 'km/h', unitPercent: '%', daysOfWeek: ['日','月','火','水','木','金','土'] }
+  },
+  ko: {
+    nav: { dashboard: '대시보드', analytics: '분석', tokens: '토큰', repos: '저장소', settings: '설정', github: 'GitHub', gitee: 'Gitee' },
+    dashboard: { todayCommits: '오늘 커밋', todayAdditions: '추가된 줄', todayDeletions: '삭제된 줄', activeAuthors: '활성 작성자', repositoryCount: '저장소 수', weeklyTotal: '주간 합계', repoComparison: '저장소 비교', weeklyTrend: '주간 트렌드', authorRank: '작성자 순위', lastCommit: '마지막 커밋', author: '작성자', commits: '커밋', changes: '변경', me: '나', noTodayCommits: '오늘 커밋 없음' },
+    analytics: { title: '데이터 분석', noData: '데이터 없음', additions: '추가', deletions: '삭제', developer: '개발자' },
+    weather: { current: '현재 날씨', forecast: '7일 예보', humidity: '습도', wind: '풍속', feelsLike: '체감 온도', loading: '로딩 중...', unavailable: '날씨 데이터 없음', today: '오늘', unitC: '°C', unitKmh: 'km/h', unitPercent: '%', daysOfWeek: ['일','월','화','수','목','금','토'] }
   }
 }
 

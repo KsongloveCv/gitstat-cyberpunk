@@ -106,18 +106,19 @@ def save_repo_meta(repo: dict):
 
 def load_repos() -> list[dict]:
     with _lock, _get_conn() as conn:
+        conn.row_factory = sqlite3.Row
         rows = conn.execute(
             "SELECT * FROM repos ORDER BY name"
         ).fetchall()
         repos = []
         for r in rows:
             repos.append({
-                "path": r[0], "name": r[1], "userEmail": r[2],
-                "currentBranch": r[3], "lastCommitTime": r[4],
-                "remoteUrl": r[5], "repoSize": r[6],
-                "analyzed": bool(r[7]), "branchCount": r[8],
-                "fileCount": r[9], "totalLines": r[10],
-                "branches": json.loads(r[11]), "languages": json.loads(r[12]),
+                "path": r["path"], "name": r["name"], "userEmail": r["user_email"],
+                "currentBranch": r["current_branch"], "lastCommitTime": r["last_commit_time"],
+                "remoteUrl": r["remote_url"], "repoSize": r["repo_size"],
+                "analyzed": bool(r["analyzed"]), "branchCount": r["branch_count"],
+                "fileCount": r["file_count"], "totalLines": r["total_lines"],
+                "branches": json.loads(r["branches"]), "languages": json.loads(r["languages"]),
             })
         return repos
 
@@ -137,6 +138,7 @@ def save_commits(repo_path: str, commits: list[dict]):
 
 def load_commits(repo_path: str) -> list[dict]:
     with _lock, _get_conn() as conn:
+        conn.row_factory = sqlite3.Row
         rows = conn.execute(
             "SELECT * FROM commits WHERE repo_path=? ORDER BY date DESC",
             (repo_path,)
@@ -144,13 +146,13 @@ def load_commits(repo_path: str) -> list[dict]:
         commits = []
         for r in rows:
             try:
-                dt = datetime.strptime(r[4], "%Y-%m-%d %H:%M:%S")
+                dt = datetime.strptime(r["date"], "%Y-%m-%d %H:%M:%S")
             except ValueError:
                 dt = datetime.now()
             commits.append({
-                "hash": r[0], "author": r[2], "email": r[3],
-                "date": dt, "message": r[5],
-                "additions": r[6], "deletions": r[7],
+                "hash": r["hash"], "author": r["author"], "email": r["email"],
+                "date": dt, "message": r["message"],
+                "additions": r["additions"], "deletions": r["deletions"],
             })
         return commits
 
@@ -178,12 +180,13 @@ def search_commits(
     sql += " ORDER BY date DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
     with _lock, _get_conn() as conn:
+        conn.row_factory = sqlite3.Row
         rows = conn.execute(sql, params).fetchall()
     results = []
     for r in rows:
         results.append({
-            "hash": r[0], "repoPath": r[1], "author": r[2], "email": r[3],
-            "date": r[4], "message": r[5], "additions": r[6], "deletions": r[7],
+            "hash": r["hash"], "repoPath": r["repo_path"], "author": r["author"], "email": r["email"],
+            "date": r["date"], "message": r["message"], "additions": r["additions"], "deletions": r["deletions"],
         })
     return results
 

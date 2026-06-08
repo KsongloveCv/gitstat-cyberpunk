@@ -31,17 +31,16 @@ class TestGiteeRouter:
 
 class TestRateLimiter:
     def test_rate_allows_first_request(self):
-        import time
-        global _rate_bucket
-        _rate_bucket = []
+        import gitee
+        gitee._rate_bucket.clear()
         try:
             _check_rate(max_req=5, window=60)
         except Exception:
             pytest.fail("First request should be allowed")
 
     def test_rate_blocks_after_limit(self):
-        global _rate_bucket
-        _rate_bucket = []
+        import gitee
+        gitee._rate_bucket.clear()
         for _ in range(5):
             try:
                 _check_rate(max_req=5, window=60)

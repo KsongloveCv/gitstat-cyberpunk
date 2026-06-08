@@ -162,4 +162,14 @@ EXT_LANG_MAP = {
     ".fish": "Shell", ".ps1": "PowerShell", ".css": "CSS", ".scss": "SCSS",
     ".less": "Less", ".html": "HTML", ".htm": "HTML", ".xml": "XML",
     ".yaml": "YAML", ".yml": "YAML", ".toml": "TOML", ".json": "JSON",
+    ".jsonc": "JSON", ".md": "Markdown", ".rst": "reStructuredText",
+    ".tex": "LaTeX", ".dockerfile": "Dockerfile", ".cmake": "CMake",
+    ".gradle": "Gradle", ".proto": "Protobuf", ".graphql": "GraphQL",
+    ".gql": "GraphQL",
+}
+
+EXACT_NAME_MAP = {
+    "Dockerfile": "Dockerfile",
+    "Makefile": "Makefile",
+    "CMakeLists.txt": "CMake",
 }

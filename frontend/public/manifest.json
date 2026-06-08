@@ -1,0 +1,12 @@
+{
+  "name": "GitStat Netrunner Edition",
+  "short_name": "GitStat",
+  "description": "Cyberpunk Git Repository Statistics",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#060b1f",
+  "theme_color": "#00f5ff",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
