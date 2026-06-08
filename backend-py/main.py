@@ -16,6 +16,7 @@ import math
 import urllib.request
 import urllib.parse
 import logging
+import logging.handlers
 from pathlib import Path
 
 LOG_DIR = Path.home() / ".gitstat"
@@ -25,7 +26,7 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)s [%(name)s] %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(LOG_DIR / "gitstat.log", encoding="utf-8"),
+        logging.handlers.RotatingFileHandler(str(LOG_DIR / "gitstat.log"), maxBytes=10*1024*1024, backupCount=3, encoding="utf-8"),
     ]
 )
 log = logging.getLogger('gitstat')

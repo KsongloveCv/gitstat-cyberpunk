@@ -16,18 +16,29 @@ GITEE_CACHE_DIR = Path.home() / ".gitstat-gitee-cache"
 GITEE_ACCESS_TOKEN = __import__("os").environ.get("GITEE_TOKEN", "")
 
 
-def _gitee_request(url: str) -> dict:
-    """调用 Gitee API，Token 通过 Header 传输（不暴露在 URL 中）。"""
+def _gitee_request(url: str, retries: int = 3) -> dict:
+    """调用 Gitee API，支持指数退避重试（最多 3 次）。"""
     import urllib.request as ur
+    import time as _time
     headers = {
         "User-Agent": "GitStat/2.0",
         "Accept": "application/json",
     }
     if GITEE_ACCESS_TOKEN:
         headers["Authorization"] = f"Bearer {GITEE_ACCESS_TOKEN}"
-    req = ur.Request(url, headers=headers)
-    with ur.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+
+    last_err = None
+    for attempt in range(retries):
+        try:
+            req = ur.Request(url, headers=headers)
+            with ur.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            last_err = e
+            if attempt < retries - 1:
+                _time.sleep(0.5 * (2 ** attempt))  # 0.5s, 1s, 2s backoff
+
+    raise last_err
 
 # Rate limiting
 _rate_bucket: list = []

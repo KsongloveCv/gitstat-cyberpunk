@@ -227,7 +227,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, onActivated, watch, nextTick } from 'vue'
 import { useI18n } from '../i18n'
 import * as api from '../api'
 import { state, fetchOverviewStats, fetchRepoDailyTrend, fetchAuthorRank, loadDashboardS2, fetchCommitList } from '../stores/data'
@@ -237,6 +237,7 @@ import StreakCard from '../components/StreakCard.vue'
 import WeatherCard from '../components/WeatherCard.vue'
 import echarts from '../utils/echarts'
 import { CHART_COLORS } from '../utils/constants'
+import { DEFAULT_LOCATION } from '../utils/location'
 
 const { t } = useI18n()
 
@@ -416,7 +417,7 @@ onMounted(async () => {
     fetchWeather(pos.coords.latitude, pos.coords.longitude)
   } catch {
     // Fallback to Shanghai coordinates
-    fetchWeather(34.34, 108.94)  // 西安
+    fetchWeather(DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lon)
   }
 
   await Promise.all([
@@ -440,6 +441,12 @@ onMounted(async () => {
   }
 
   window.addEventListener('resize', handleResize)
+})
+
+onActivated(() => {
+  nextTick(() => {
+    if (trendChart) trendChart.resize()
+  })
 })
 
 onUnmounted(() => {
