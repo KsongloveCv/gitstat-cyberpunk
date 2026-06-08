@@ -793,10 +793,10 @@ def api_get_repo_info(path: str = Query(...)):
     file_count = cache["fileCount"]
     remote_url = cache["remoteUrl"]
 
-    try:
+    if branch_count == 0:
         info = get_repo_meta(path)
         branch_count = info["branchCount"]
-        file_count = meta["fileCount"]
+        file_count = info["fileCount"]
         store.update_repo(path, branchCount=branch_count, fileCount=file_count)
 
     if not remote_url:
