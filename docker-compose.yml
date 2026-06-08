@@ -1,12 +1,14 @@
-version: "3.8"
-
 services:
   gitstat:
     build: .
     ports:
       - "12580:12580"
     volumes:
-      - ./.gitstat-gitee-cache:/root/.gitstat-gitee-cache
+      - gitstat-data:/home/gitstat/.gitstat
+      - ./.gitstat-gitee-cache:/home/gitstat/.gitstat-gitee-cache
     environment:
       - GITEE_TOKEN=${GITEE_TOKEN:-}
     restart: unless-stopped
+
+volumes:
+  gitstat-data:

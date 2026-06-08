@@ -70,7 +70,7 @@
 
     <!-- Main Content -->
     <main class="main-content">
-      <KeepAlive>
+      <KeepAlive :max="4">
         <component :is="currentComponent" />
       </KeepAlive>
     </main>

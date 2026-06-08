@@ -1,6 +1,7 @@
 """Gitee API — 码云代码统计模块."""
 import json
 import re
+import threading
 import urllib.request
 import subprocess
 import shutil
@@ -40,17 +41,27 @@ def _gitee_request(url: str, retries: int = 3) -> dict:
 
     raise last_err
 
-# Rate limiting
-_rate_bucket: list = []
+# Rate limiting (thread-safe dict with periodic eviction)
+_rate_bucket: dict[str, list[float]] = {}
+_rate_last_purge: float = 0.0
+_rate_lock = threading.Lock()
 
 def _check_rate(max_req=30, window=60):
-    """Simple sliding-window rate limiter for Gitee API calls."""
+    """Thread-safe sliding-window rate limiter for Gitee API calls."""
     now = time.time()
-    global _rate_bucket
-    _rate_bucket = [t for t in _rate_bucket if now - t < window]
-    if len(_rate_bucket) >= max_req:
-        raise HTTPException(429, "Too many requests, slow down")
-    _rate_bucket.append(now)
+    with _rate_lock:
+        # Periodic eviction of stale keys (every 5 minutes)
+        if now - _rate_last_purge > 300:
+            stale = [k for k in _rate_bucket if not _rate_bucket[k] or now - _rate_bucket[k][-1] > window]
+            for k in stale:
+                del _rate_bucket[k]
+            _rate_last_purge = now
+
+        bucket = [t for t in _rate_bucket.get("gitee", []) if now - t < window]
+        if len(bucket) >= max_req:
+            raise HTTPException(429, "Too many requests, slow down")
+        bucket.append(now)
+        _rate_bucket["gitee"] = bucket
 
 def gitee_api(path: str) -> dict:
     """调用 Gitee Open API v5，Token 通过 Header 传输，不暴露在 URL 中。"""

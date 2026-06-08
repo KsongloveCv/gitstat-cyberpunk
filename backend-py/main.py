@@ -31,34 +31,6 @@ logging.basicConfig(
 )
 log = logging.getLogger('gitstat')
 
-# Simple TTL cache for expensive operations
-class TTLCache:
-    """Thread-safe TTL cache with dict interface."""
-
-    def __init__(self, ttl_seconds: float = 300):
-        self._ttl = ttl_seconds
-        self._data: dict[str, tuple[float, any]] = {}
-        self._lock = threading.Lock()
-
-    def get(self, key: str):
-        with self._lock:
-            entry = self._data.get(key)
-            if entry:
-                ts, val = entry
-                if time.time() - ts < self._ttl:
-                    return val
-                del self._data[key]
-            return None
-
-    def set(self, key: str, value: any):
-        with self._lock:
-            self._data[key] = (time.time(), value)
-
-    def clear(self):
-        with self._lock:
-            self._data.clear()
-
-git_log_cache = TTLCache(ttl_seconds=300)  # 5 min cache for git log results
 from datetime import datetime, timedelta, date
 from typing import Optional
 from collections import defaultdict
@@ -74,10 +46,11 @@ import uvicorn
 import database
 from git_utils import (
     git_exec, get_git_version, parse_git_log, run_git_log,
-    git_log_cache, get_repo_meta, get_remote_url, get_repo_size, EXT_LANG_MAP
+    git_log_cache, get_repo_meta, get_remote_url, get_repo_size,
+    EXT_LANG_MAP, EXACT_NAME_MAP,
 )
 from store import store
-from gitee import gitee_router, clone_gitee_repo
+from gitee import gitee_router, clone_gitee_repo, gitee_api, gitee_list_repos, gitee_get_repo
 from weather import weather_router
 from insights import insights_router
 from github_module import github_router
@@ -89,295 +62,7 @@ from security import (
 from config import VERSION, MAX_COMMITS_PER_REPO, DEFAULT_HOST, DEFAULT_PORT, FRONTEND_DIST
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  CONFIG
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-# Gitee cache dir (clone helper in main.py)
-GITEE_CACHE_DIR = Path.home() / ".gitstat-gitee-cache"
-
-
-def gitee_api(path: str) -> dict:
-    """调用 Gitee Open API v5，返回 JSON。支持可选的 GITEE_TOKEN 认证。"""
-    url = f"{GITEE_API_BASE}{path}"
-    if "?" in path:
-        url += f"&access_token={GITEE_ACCESS_TOKEN}" if GITEE_ACCESS_TOKEN else ""
-    else:
-        url += f"?access_token={GITEE_ACCESS_TOKEN}" if GITEE_ACCESS_TOKEN else ""
-    try:
-        req = urllib.request.Request(url, headers={
-            "User-Agent": "GitStat/2.0",
-            "Accept": "application/json",
-        })
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except Exception as e:
-        raise HTTPException(503, f"Gitee API unavailable: {e}")
-
-
-def gitee_list_repos(owner: str, page: int = 1, per_page: int = 30) -> list[dict]:
-    """获取某用户/组织的公开仓库列表（先尝试组织，再尝试用户）。"""
-    raw = None
-    # 先尝试组织
-    try:
-        raw = gitee_api(f"/orgs/{owner}/repos?page={page}&per_page={per_page}&sort=updated")
-    except HTTPException:
-        pass
-    # 如果组织不成功，尝试用户
-    if raw is None or not isinstance(raw, list):
-        try:
-            raw = gitee_api(f"/users/{owner}/repos?page={page}&per_page={per_page}&sort=updated")
-        except HTTPException:
-            pass
-    if not isinstance(raw, list):
-        return []
-    return [{
-        "id": r.get("id"),
-        "name": r.get("name"),
-        "fullName": r.get("full_name"),
-        "description": r.get("description", ""),
-        "htmlUrl": r.get("html_url", "").replace(".git", ""),
-        "sshUrl": r.get("ssh_url"),
-        "cloneUrl": f"https://gitee.com/{r.get('full_name')}.git",
-        "stars": r.get("stargazers_count", 0),
-        "forks": r.get("forks_count", 0),
-        "language": r.get("language", ""),
-        "owner": owner,
-        "updatedAt": r.get("updated_at", ""),
-        "pushedAt": r.get("pushed_at", ""),
-        "createdAt": r.get("created_at", ""),
-    } for r in raw]
-
-
-def gitee_get_repo(owner: str, repo: str) -> dict:
-    """获取单个仓库信息。"""
-    r = gitee_api(f"/repos/{owner}/{repo}")
-    return {
-        "id": r.get("id"),
-        "name": r.get("name"),
-        "fullName": r.get("full_name"),
-        "description": r.get("description", ""),
-        "htmlUrl": r.get("html_url"),
-        "sshUrl": r.get("ssh_url"),
-        "cloneUrl": r.get("clone_url"),
-        "stars": r.get("stargazers_count", 0),
-        "forks": r.get("forks_count", 0),
-        "language": r.get("language", ""),
-        "updatedAt": r.get("updated_at", ""),
-        "pushedAt": r.get("pushed_at", ""),
-        "createdAt": r.get("created_at", ""),
-        "commitsCount": r.get("commits_count", 0),
-        "watchers": r.get("watchers_count", 0),
-        "defaultBranch": r.get("default_branch", "master"),
-    }
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  GIT EXEC — 调用 git 命令
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def git_exec(repo_path: str, *args: str) -> str:
-    """在指定仓库路径执行 git 命令，返回 stdout 字符串。"""
-    try:
-        result = subprocess.run(
-            ["git"] + list(args),
-            cwd=repo_path,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return result.stdout.rstrip("\n\r ")
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return ""
-
-
-def get_git_version() -> str:
-    """获取本机 git 版本号。"""
-    try:
-        out = subprocess.run(
-            ["git", "--version"],
-            capture_output=True, text=True, timeout=5
-        ).stdout.strip()
-        m = re.search(r"\d+\.\d+\.\d+", out)
-        return f"git {m.group()}" if m else out
-    except Exception as e:
-        log.warning("Failed to detect git version: %s", e)
-        return "git not found"
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  GITEE CLONE — 从 Gitee 克隆仓库到本地缓存
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def clone_gitee_repo(clone_url: str, owner: str, repo: str) -> dict:
-    """Clone 一个 Gitee 仓库到本地缓存目录，返回路径信息。"""
-    GITEE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    target_dir = GITEE_CACHE_DIR / f"{owner}_{repo}"
-
-    if target_dir.exists():
-        # 已存在则 pull
-        try:
-            subprocess.run(
-                ["git", "-C", str(target_dir), "pull", "--ff-only"],
-                capture_output=True, text=True, timeout=60
-            )
-        except (subprocess.TimeoutExpired, OSError):
-            pass
-    else:
-        # Clone
-        try:
-            result = subprocess.run(
-                ["git", "clone", "--depth", "100", clone_url, str(target_dir)],
-                capture_output=True, text=True, timeout=120
-            )
-        except subprocess.TimeoutExpired:
-            raise HTTPException(504, "Clone timed out")
-        except OSError as e:
-            raise HTTPException(500, f"Clone failed: {e}")
-
-        if result.returncode != 0:
-            import shutil
-            shutil.rmtree(target_dir, ignore_errors=True)
-            raise HTTPException(400, f"Clone failed: {result.stderr}")
-
-    return {
-        "path": str(target_dir),
-        "name": repo,
-        "owner": owner,
-        "cloneUrl": clone_url,
-    }
-
-
-def gitee_load_commits(repo_path: str) -> list[dict]:
-    """在已 clone 的 Gitee 仓库上运行 git log 解析。"""
-    return run_git_log(repo_path)
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  GIT LOG PARSER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def parse_git_log(text: str) -> list[dict]:
-    """解析 git log --format + --numstat 输出为 commit 列表。"""
-    lines = text.split("\n")
-    commits = []
-    marker = "---GITSTAT_COMMIT---"
-
-    i = 0
-    while i < len(lines) and lines[i] != marker:
-        i += 1
-
-    while i < len(lines):
-        if lines[i] != marker:
-            i += 1
-            continue
-        i += 1  # skip marker
-
-        if i + 4 >= len(lines):
-            break
-
-        commit_hash = lines[i].strip(); i += 1
-        author = lines[i].strip(); i += 1
-        email = lines[i].strip(); i += 1
-        date_str = lines[i].strip(); i += 1
-        subject = lines[i].strip(); i += 1
-
-        # 解析日期（git 返回带时区的日期，统一转成 naive datetime 方便比较）
-        commit_time = None
-        for fmt in ["%Y-%m-%d %H:%M:%S %z", "%Y-%m-%d %H:%M:%S"]:
-            try:
-                dt = datetime.strptime(date_str, fmt)
-                # 如果带时区，转成本地时间后去掉 tzinfo
-                if dt.tzinfo is not None:
-                    dt = dt.replace(tzinfo=None)
-                commit_time = dt
-                break
-            except ValueError:
-                continue
-
-        # 解析 numstat
-        additions = 0
-        deletions = 0
-        while i < len(lines) and lines[i] != marker:
-            line = lines[i].strip()
-            i += 1
-            if not line:
-                continue
-            parts = line.split("\t")
-            if len(parts) >= 2:
-                try:
-                    additions += int(parts[0])
-                except ValueError:
-                    pass
-                try:
-                    deletions += int(parts[1])
-                except ValueError:
-                    pass
-
-        commits.append({
-            "hash": commit_hash,
-            "author": author,
-            "email": email,
-            "date": commit_time or datetime.now(),
-            "message": subject,
-            "additions": additions,
-            "deletions": deletions,
-        })
-
-    return commits
-
-
-def run_git_log(repo_path: str, since: Optional[datetime] = None,
-                until: Optional[datetime] = None, use_cache: bool = True) -> list[dict]:
-    """在仓库中运行 git log 并返回解析后的 commit 列表（带 TTL 缓存）。"""
-    cache_key = f"{repo_path}:{since}:{until}"
-    if use_cache:
-        cached = git_log_cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-    args = ["log", "--format=---GITSTAT_COMMIT---%n%H%n%an%n%ae%n%ci%n%s", "--numstat"]
-    if since:
-        args.append(f"--since={since.strftime('%Y-%m-%d %H:%M:%S')}")
-    if until:
-        args.append(f"--until={until.strftime('%Y-%m-%d %H:%M:%S')}")
-
-    output = git_exec(repo_path, *args)
-    if not output:
-        return []
-    result = parse_git_log(output)
-    if use_cache:
-        git_log_cache.set(cache_key, result)
-    return result
-    return parse_git_log(output)
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  SCANNER — 发现 Git 仓库 + 深度分析
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-EXT_LANG_MAP = {
-    ".rs": "Rust", ".go": "Go", ".py": "Python", ".js": "JavaScript",
-    ".jsx": "React (JSX)", ".ts": "TypeScript", ".tsx": "React (TSX)",
-    ".vue": "Vue", ".svelte": "Svelte", ".java": "Java", ".kt": "Kotlin",
-    ".kts": "Kotlin", ".scala": "Scala", ".c": "C", ".h": "C/C++ Header",
-    ".cpp": "C++", ".cxx": "C++", ".hpp": "C++ Header", ".cs": "C#",
-    ".rb": "Ruby", ".php": "PHP", ".swift": "Swift", ".m": "Objective-C",
-    ".mm": "Objective-C++", ".r": "R", ".dart": "Dart", ".lua": "Lua",
-    ".hs": "Haskell", ".zig": "Zig", ".pl": "Perl", ".pm": "Perl",
-    ".sql": "SQL", ".sh": "Shell", ".bash": "Shell", ".zsh": "Shell",
-    ".fish": "Shell", ".ps1": "PowerShell", ".css": "CSS", ".scss": "SCSS",
-    ".less": "Less", ".html": "HTML", ".htm": "HTML", ".xml": "XML",
-    ".yaml": "YAML", ".yml": "YAML", ".toml": "TOML", ".json": "JSON",
-    ".jsonc": "JSON", ".md": "Markdown", ".rst": "reStructuredText",
-    ".tex": "LaTeX", ".dockerfile": "Dockerfile", ".cmake": "CMake",
-    ".gradle": "Gradle", ".proto": "Protobuf", ".graphql": "GraphQL",
-    ".gql": "GraphQL",
-}
-
-EXACT_NAME_MAP = {
-    "Dockerfile": "Dockerfile",
-    "Makefile": "Makefile",
-    "CMakeLists.txt": "CMake",
-}
+#  FASTAPI APP
 
 
 def scan_metadata(repo_path: str) -> Optional[dict]:
@@ -401,7 +86,7 @@ def scan_metadata(repo_path: str) -> Optional[dict]:
             "lastCommitTime": last_commit_time,
         }
     except Exception as e:
-        log.warning("Failed to extract repo meta for %s: %s", path, e)
+        log.warning("Failed to extract repo meta for %s: %s", repo_path, e)
         return None
 
 
@@ -1026,12 +711,12 @@ async def api_set_scan_path(request: Request):
     body = await request.json()
     path = body.get("path", "")
     validate_scan_path(path)
-    resolved = resolve_scan_path(path)
+    resolved = await asyncio.to_thread(resolve_scan_path, path)
     store.clear_all()
     database.clear_repo_data()
     store.set_scan_path(resolved)
     database.save_scan_path(resolved)
-    repos = discover_repos(resolved)
+    repos = await asyncio.to_thread(discover_repos, resolved)
     store.register_repos(repos)
 
     message = "Path set successfully, data will be loaded on demand"
@@ -1108,9 +793,9 @@ def api_get_repo_info(path: str = Query(...)):
     file_count = cache["fileCount"]
     remote_url = cache["remoteUrl"]
 
-    if branch_count == 0:
-        meta = get_repo_meta(path)
-        branch_count = meta["branchCount"]
+    try:
+        info = get_repo_meta(path)
+        branch_count = info["branchCount"]
         file_count = meta["fileCount"]
         store.update_repo(path, branchCount=branch_count, fileCount=file_count)
 

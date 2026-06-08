@@ -19,10 +19,20 @@ GITEE_CLONE_PATTERN = re.compile(
 )
 
 _rate_store: dict[str, list[float]] = {}
+_rate_last_purge: float = 0.0
 
 
 def check_rate_limit(key: str, max_req: int = 60, window: int = 60) -> bool:
     now = time.time()
+    # Purge stale keys every 5 minutes to prevent memory leak
+    global _rate_last_purge
+    if now - _rate_last_purge > 300:
+        stale_keys = [k for k, bucket in _rate_store.items()
+                      if not bucket or now - bucket[-1] > window]
+        for k in stale_keys:
+            del _rate_store[k]
+        _rate_last_purge = now
+
     bucket = [t for t in _rate_store.get(key, []) if now - t < window]
     if len(bucket) >= max_req:
         return False
