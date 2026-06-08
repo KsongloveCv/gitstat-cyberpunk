@@ -152,10 +152,17 @@
           </div>
         </div>
 
-        <!-- 今日提交详情 -->
+        <!-- 提交详情 -->
         <div class="daily-stats-section">
           <div class="section-header">
             <h3>{{ t('dashboard.todayDetails') }}</h3>
+            <div class="commit-range-selector">
+              <button
+                v-for="r in commitRanges" :key="r.value"
+                class="range-btn" :class="{ active: commitRange === r.value }"
+                @click="switchCommitRange(r.value)"
+              >{{ r.label }}</button>
+            </div>
           </div>
           
           <div v-if="sectionLoading.below" class="skeleton-daily">
@@ -172,7 +179,7 @@
             </div>
           </div>
           <template v-else-if="state.commitList && state.commitList.length > 0">
-            <div class="commit-list card">
+            <div class="commit-list card" :class="{ 'loading-list': commitsLoading }">
               <div 
                 v-for="commit in state.commitList" 
                 :key="commit.hash" 
@@ -237,6 +244,28 @@ const sectionLoading = reactive({
   rank: true,
   below: true
 })
+
+// Commit detail range selector
+const commitRange = ref('today')
+const commitRanges = [
+  { value: 'today', label: '今日' },
+  { value: 'week', label: '本周' },
+  { value: 'month', label: '本月' },
+  { value: 'year', label: '本年' },
+]
+const commitsLoading = ref(false)
+
+async function switchCommitRange(range) {
+  commitRange.value = range
+  commitsLoading.value = true
+  try {
+    await fetchCommitList(range, [])
+  } catch (e) {
+    console.error('Failed to load commits:', e)
+  } finally {
+    commitsLoading.value = false
+  }
+}
 
 function getWeekRange() {
   const now = new Date()
@@ -1161,5 +1190,39 @@ onUnmounted(() => {
     display: block;
     overflow-x: auto;
   }
+}
+
+/* Commit range selector */
+.commit-range-selector {
+  display: flex;
+  gap: 0.35rem;
+}
+.range-btn {
+  padding: 0.3rem 0.75rem;
+  background: transparent;
+  border: 1px solid rgba(0, 245, 255, 0.2);
+  border-radius: 4px;
+  color: #64748b;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.65rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  letter-spacing: 0.5px;
+}
+.range-btn:hover {
+  border-color: rgba(0, 245, 255, 0.4);
+  color: #94a3b8;
+}
+.range-btn.active {
+  background: rgba(0, 245, 255, 0.12);
+  border-color: var(--neon-cyan);
+  color: var(--neon-cyan);
+  box-shadow: 0 0 8px rgba(0, 245, 255, 0.15);
+}
+
+.commit-list.loading-list {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.2s;
 }
 </style>
