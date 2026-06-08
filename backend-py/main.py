@@ -1388,6 +1388,7 @@ def api_commit_list(
 
     all_commits = []
     for r in repos:
+        branch = r.get("currentBranch", "")
         for c in _filter_commits(r["commits"], user, start, end):
             all_commits.append({
                 "hash": c["hash"],
@@ -1399,6 +1400,8 @@ def api_commit_list(
                 "deletions": c["deletions"],
                 "repoName": r["name"],
                 "repoPath": r["path"],
+                "branch": branch,
+                "netChange": c["additions"] - c["deletions"],
             })
 
     all_commits.sort(key=lambda c: c["date"], reverse=True)

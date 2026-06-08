@@ -186,13 +186,14 @@
                 class="commit-row"
               >
                 <div class="commit-left">
-                  <div class="commit-hash">{{ commit.hash.slice(0, 7) }}</div>
+                  <div class="commit-hash" :title="commit.hash">{{ commit.hash.slice(0, 8) }}</div>
                   <div class="commit-info">
                     <div class="commit-message">{{ commit.message }}</div>
                     <div class="commit-meta">
                       <span class="commit-author">{{ commit.author }}</span>
                       <span v-if="commit.email === userEmail" class="me-badge-small">{{ t('dashboard.me') }}</span>
                       <span class="commit-repo">{{ commit.repoName }}</span>
+                      <span v-if="commit.branch" class="commit-branch">⑂ {{ commit.branch }}</span>
                       <span class="commit-time">{{ formatTimeAgo(commit.date) }}</span>
                     </div>
                   </div>
@@ -201,14 +202,15 @@
                   <div class="change-stats">
                     <span v-if="commit.additions > 0" class="change-additions">+{{ commit.additions }}</span>
                     <span v-if="commit.deletions > 0" class="change-deletions">-{{ commit.deletions }}</span>
+                    <span v-if="commit.netChange !== undefined" class="change-net" :class="{ 'net-plus': commit.netChange > 0, 'net-minus': commit.netChange < 0 }">{{ commit.netChange >= 0 ? '+' : '' }}{{ commit.netChange }}</span>
                   </div>
                   <div class="change-bar" v-if="commit.additions + commit.deletions > 0">
-                    <div 
-                      class="change-bar-add" 
+                    <div
+                      class="change-bar-add"
                       :style="{ width: barWidth(commit.additions, commit.additions + commit.deletions) }"
                     ></div>
-                    <div 
-                      class="change-bar-del" 
+                    <div
+                      class="change-bar-del"
                       :style="{ width: barWidth(commit.deletions, commit.additions + commit.deletions) }"
                     ></div>
                   </div>
@@ -1064,6 +1066,23 @@ onUnmounted(() => {
 .commit-time {
   color: #64748b;
 }
+.commit-branch {
+  color: var(--neon-cyan);
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  background: rgba(0, 245, 255, 0.06);
+  border: 1px solid rgba(0, 245, 255, 0.15);
+  border-radius: 4px;
+}
+.change-net {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.net-plus { color: #10b981; background: rgba(16, 185, 129, 0.08); }
+.net-minus { color: #ef4444; background: rgba(239, 68, 68, 0.08); }
 
 .commit-right {
   display: flex;
