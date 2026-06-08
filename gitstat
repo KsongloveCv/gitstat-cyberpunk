@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""GitStat CLI — terminal quick stats."""
+import sys, os, json, urllib.request as ur
+
+BASE = os.environ.get("GITSTAT_URL", "http://localhost:12580")
+
+
+def fetch(path: str) -> dict:
+    try:
+        with ur.urlopen(f"{BASE}{path}", timeout=10) as r:
+            return json.loads(r.read().decode())
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+
+def main():
+    import argparse
+    p = argparse.ArgumentParser(description="GitStat CLI")
+    p.add_argument("--today", action="store_true", help="Today's stats")
+    p.add_argument("--week", action="store_true", help="This week's stats")
+    p.add_argument("--author", type=str, help="Author stats")
+    p.add_argument("--top-files", action="store_true", help="Top changed files")
+    p.add_argument("--quality", action="store_true", help="Commit quality score")
+    p.add_argument("--bus-factor", action="store_true", help="Bus factor analysis")
+    p.add_argument("--alerts", action="store_true", help="Large commit alerts")
+    p.add_argument("--report", action="store_true", help="Weekly report (markdown)")
+    args = p.parse_args()
+
+    if args.today:
+        d = fetch("/api/stats/overview")
+        o = d.get("data", d)
+        print(f"今日: {o.get('totalCommits',0)} commits, +{o.get('totalAdditions',0)}/-{o.get('totalDeletions',0)}, {o.get('activeAuthors',0)} authors")
+
+    elif args.week:
+        d = fetch("/api/stats/overview")
+        o = d.get("data", d)
+        print(f"本周: {o.get('totalCommits',0)} commits")
+
+    elif args.author:
+        d = fetch(f"/api/stats/authors?email={args.author}")
+        for a in d if isinstance(d, list) else d.get("data", []):
+            print(f"  {a['author']}: {a['commits']} commits, +{a['additions']}/-{a['deletions']}")
+
+    elif args.top_files:
+        d = fetch("/api/insights/file-churn")
+        for f in d.get("data", {}).get("files", []):
+            print(f"  {f['path']}: {f['commits']} commits, +{f['additions']}/-{f['deletions']}")
+
+    elif args.quality:
+        d = fetch("/api/insights/commit-quality")
+        q = d.get("data", {})
+        print(f"提交质量: {q.get('score',0)}/100, 规范率 {q.get('conventionalRate',0)}%")
+
+    elif args.bus_factor:
+        d = fetch("/api/insights/bus-factor")
+        b = d.get("data", {})
+        print(f"Bus Factor: {b.get('riskLevel','?')}, 人均作者 {b.get('avgAuthorsPerRepo',0)}")
+        for s in b.get("silos", []):
+            print(f"  ⚠ {s['repo']} — 仅 {s.get('author','?')}")
+
+    elif args.alerts:
+        d = fetch("/api/insights/alerts/large-commits")
+        for a in d.get("data", {}).get("alerts", []):
+            print(f"  ⚡ {a['total']}行 {a['repo']} {a['hash']} — {a['message'][:50]}")
+
+    elif args.report:
+        d = fetch("/api/insights/weekly-report")
+        print(d.get("data", {}).get("markdown", "No data"))
+
+    else:
+        p.print_help()
+
+
+if __name__ == "__main__":
+    main()

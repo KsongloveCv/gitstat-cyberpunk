@@ -79,6 +79,8 @@ from git_utils import (
 from store import store
 from gitee import gitee_router, clone_gitee_repo
 from weather import weather_router
+from insights import insights_router
+from github_module import github_router
 from security import (
     check_rate_limit, rate_limit_or_429, validate_repo_path, validate_scan_path,
     validate_gitee_clone_url, safe_static_path, verify_api_key, clamp_limit,
@@ -968,6 +970,8 @@ def _validate_path(p: str) -> str:
 # Register module routes
 app.include_router(gitee_router)
 app.include_router(weather_router)
+app.include_router(insights_router)
+app.include_router(github_router)
 
 
 # Global exception handler
