@@ -1,15 +1,26 @@
 #!/bin/bash
-# GitStat Netrunner Edition — 启动脚本
-# 用法: ./scripts/start.sh [--no-browser]
+# GitStat Cyberpunk — macOS 一键启动
+# 用法: ./start.sh [scan_path] [--no-browser]
 
-PROJECT_DIR="/Users/songkang/Desktop/AI-Test/004-gitstat-cyberpunk"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="/tmp/gitstat"
 PID_FILE="$LOG_DIR/backend.pid"
 BACKEND_PORT=12580
+SCAN_PATH="${1:-.}"
+
+# --no-browser 参数处理
+NO_BROWSER=0
+for arg in "$@"; do
+    if [ "$arg" = "--no-browser" ]; then
+        NO_BROWSER=1
+    elif [ "$arg" != "." ]; then
+        SCAN_PATH="$arg"
+    fi
+done
 
 mkdir -p "$LOG_DIR"
 
-# 如果已经在运行，先停掉
+# 清理旧进程
 if [ -f "$PID_FILE" ]; then
     OLD_PID=$(cat "$PID_FILE")
     if kill -0 "$OLD_PID" 2>/dev/null; then
@@ -20,22 +31,22 @@ if [ -f "$PID_FILE" ]; then
     rm -f "$PID_FILE"
 fi
 
-# 确保端口没被占用
+# 清理端口占用
 PID_ON_PORT=$(lsof -ti :$BACKEND_PORT 2>/dev/null)
 if [ -n "$PID_ON_PORT" ]; then
-    echo "端口 $BACKPORT 被占用，清理..."
+    echo "端口 $BACKEND_PORT 被占用，清理..."
     kill "$PID_ON_PORT" 2>/dev/null
     sleep 2
 fi
 
 # 启动后端
-cd "$PROJECT_DIR/backend-py"
-nohup python3 main.py > "$LOG_DIR/backend.log" 2>&1 &
+cd "$SCRIPT_DIR/backend-py"
+nohup python3 main.py "$SCAN_PATH" > "$LOG_DIR/backend.log" 2>&1 &
 BACKEND_PID=$!
 echo "$BACKEND_PID" > "$PID_FILE"
 echo "后端启动 PID=$BACKEND_PID 端口=$BACKEND_PORT"
 
-# 等待后端就绪
+# 等待就绪
 READY=0
 for i in $(seq 1 15); do
     sleep 1
@@ -47,14 +58,14 @@ for i in $(seq 1 15); do
 done
 
 if [ $READY -eq 0 ]; then
-    echo "⚠️ 后端启动超时，检查日志: $LOG_DIR/backend.log"
+    echo "后端启动超时，检查日志: $LOG_DIR/backend.log"
     tail -20 "$LOG_DIR/backend.log"
     exit 1
 fi
 
-# 打开浏览器（除非 --no-browser）
-if [ "$1" != "--no-browser" ]; then
+# 打开浏览器
+if [ $NO_BROWSER -eq 0 ]; then
     open -a "Google Chrome" "http://localhost:$BACKEND_PORT"
 fi
 
-echo "✅ GitStat 启动完成!"
+echo "GitStat 启动完成!"
