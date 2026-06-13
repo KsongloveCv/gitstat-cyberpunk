@@ -9,7 +9,8 @@ const messages = {
       repos: '仓库信息',
       settings: '设置',
       github: 'GitHub',
-      gitee: 'Gitee'
+      gitee: 'Gitee',
+      toolbox: '工具箱'
     },
     dashboard: {
       switchDirectory: '切换目录',
@@ -269,6 +270,108 @@ const messages = {
       totalAdditions: '新增行数',
       totalDeletions: '删除行数',
       activeAuthors: '活跃作者'
+    },
+    toolbox: {
+      title: '开发者工具箱',
+      subtitle: '编码 · 转换 · 校验 · 即时可用',
+      copy: '复制结果',
+      json: {
+        title: 'JSON 格式化',
+        placeholder: '在此输入 JSON...',
+        format: '格式化',
+        minify: '压缩',
+        validate: '校验',
+        valid: 'JSON 格式有效',
+        invalid: 'JSON 格式无效'
+      },
+      base64: {
+        title: 'Base64 编解码',
+        placeholder: '在此输入文本或 Base64...',
+        encode: '编码',
+        decode: '解码',
+        encodeError: '编码失败',
+        decodeError: '解码失败'
+      },
+      timestamp: {
+        title: '时间戳转换',
+        inputPlaceholder: '输入 Unix 时间戳或日期字符串',
+        convert: '转换',
+        now: '当前时间',
+        invalid: '无法识别的时间格式'
+      },
+      hash: {
+        title: 'Hash 生成',
+        placeholder: '在此输入文本生成哈希...'
+      },
+      regex: {
+        title: '正则测试',
+        patternPlaceholder: '输入正则表达式',
+        testPlaceholder: '输入测试文本',
+        test: '测试',
+        matchCount: '匹配数',
+        error: '正则错误'
+      },
+      color: {
+        title: '颜色转换',
+        convert: '转换'
+      },
+      jwt: {
+        title: 'JWT 解析',
+        placeholder: '输入 JWT Token...',
+        parse: '解析',
+        invalid: '无效的 JWT',
+        expired: '已过期',
+        expiresAt: '过期时间'
+      },
+      url: {
+        title: 'URL 编解码',
+        placeholder: '输入 URL 或文本...',
+        encode: '编码',
+        decode: '解码',
+        parse: '解析',
+        parseError: '解析失败'
+      },
+      uuid: {
+        title: 'UUID 生成器'
+      },
+      diff: {
+        title: '文本差异对比',
+        leftPlaceholder: '输入左侧文本...',
+        rightPlaceholder: '输入右侧文本...',
+        compare: '对比'
+      },
+      markdown: {
+        title: 'Markdown 预览',
+        placeholder: '输入 Markdown 内容...'
+      },
+      cron: {
+        title: 'CRON 表达式',
+        placeholder: '输入 CRON 表达式 (如 0 9 * * 1-5)',
+        parse: '解析',
+        invalid: '无效的 CRON 表达式',
+        nextRuns: '下次执行时间'
+      },
+      password: {
+        title: '密码强度分析',
+        placeholder: '输入密码...',
+        weak: '弱',
+        medium: '中等',
+        strong: '强',
+        veryStrong: '非常强',
+        length: '长度',
+        hasUpper: '大写字母',
+        hasLower: '小写字母',
+        hasDigit: '数字',
+        hasSpecial: '特殊字符',
+        crackTime: '估算破解时间',
+        instant: '瞬间'
+      },
+      qrcode: {
+        title: 'QR Code 生成',
+        placeholder: '输入文本或 URL...',
+        generate: '生成',
+        download: '下载'
+      }
     }
   },
   en: {
@@ -279,7 +382,8 @@ const messages = {
       repos: 'Repositories',
       settings: 'Settings',
       github: 'GitHub',
-      gitee: 'Gitee'
+      gitee: 'Gitee',
+      toolbox: 'Toolbox'
     },
     dashboard: {
       switchDirectory: 'Switch Directory',
@@ -539,10 +643,111 @@ const messages = {
       totalAdditions: 'Additions',
       totalDeletions: 'Deletions',
       activeAuthors: 'Active Authors'
+    },
+    toolbox: {
+      title: 'Developer Toolbox',
+      subtitle: 'Encode · Convert · Validate · Instant',
+      copy: 'Copy',
+      json: {
+        title: 'JSON Formatter',
+        placeholder: 'Enter JSON here...',
+        format: 'Format',
+        minify: 'Minify',
+        validate: 'Validate',
+        valid: 'Valid JSON',
+        invalid: 'Invalid JSON'
+      },
+      base64: {
+        title: 'Base64 Codec',
+        placeholder: 'Enter text or Base64 here...',
+        encode: 'Encode',
+        decode: 'Decode',
+        encodeError: 'Encode failed',
+        decodeError: 'Decode failed'
+      },
+      timestamp: {
+        title: 'Timestamp Converter',
+        inputPlaceholder: 'Enter Unix timestamp or date string',
+        convert: 'Convert',
+        now: 'Now',
+        invalid: 'Unrecognized time format'
+      },
+      hash: {
+        title: 'Hash Generator',
+        placeholder: 'Enter text to hash...'
+      },
+      regex: {
+        title: 'Regex Tester',
+        patternPlaceholder: 'Enter regex pattern',
+        testPlaceholder: 'Enter test text',
+        test: 'Test',
+        matchCount: 'Matches',
+        error: 'Regex error'
+      },
+      color: {
+        title: 'Color Converter',
+        convert: 'Convert'
+      },
+      jwt: {
+        title: 'JWT Parser',
+        placeholder: 'Enter JWT Token...',
+        parse: 'Parse',
+        invalid: 'Invalid JWT',
+        expired: 'Expired',
+        expiresAt: 'Expires at'
+      },
+      url: {
+        title: 'URL Codec',
+        placeholder: 'Enter URL or text...',
+        encode: 'Encode',
+        decode: 'Decode',
+        parse: 'Parse',
+        parseError: 'Parse error'
+      },
+      uuid: {
+        title: 'UUID Generator'
+      },
+      diff: {
+        title: 'Text Diff',
+        leftPlaceholder: 'Enter left text...',
+        rightPlaceholder: 'Enter right text...',
+        compare: 'Compare'
+      },
+      markdown: {
+        title: 'Markdown Preview',
+        placeholder: 'Enter Markdown content...'
+      },
+      cron: {
+        title: 'CRON Expression',
+        placeholder: 'Enter CRON expression (e.g. 0 9 * * 1-5)',
+        parse: 'Parse',
+        invalid: 'Invalid CRON expression',
+        nextRuns: 'Next execution times'
+      },
+      password: {
+        title: 'Password Strength',
+        placeholder: 'Enter password...',
+        weak: 'Weak',
+        medium: 'Medium',
+        strong: 'Strong',
+        veryStrong: 'Very Strong',
+        length: 'Length',
+        hasUpper: 'Uppercase',
+        hasLower: 'Lowercase',
+        hasDigit: 'Digits',
+        hasSpecial: 'Special chars',
+        crackTime: 'Estimated crack time',
+        instant: 'Instant'
+      },
+      qrcode: {
+        title: 'QR Code Generator',
+        placeholder: 'Enter text or URL...',
+        generate: 'Generate',
+        download: 'Download'
+      }
     }
   },
   ja: {
-    nav: { dashboard: 'ダッシュボード', analytics: '分析', tokens: 'トークン', repos: 'リポジトリ', settings: '設定', github: 'GitHub', gitee: 'Gitee' },
     dashboard: { todayCommits: '今日のコミット', todayAdditions: '追加行', todayDeletions: '削除行', activeAuthors: 'アクティブ作者', repositoryCount: 'リポジトリ数', weeklyTotal: '週間合計', repoComparison: 'リポジトリ比較', weeklyTrend: '週間トレンド', authorRank: '作者ランキング', lastCommit: '最終コミット', author: '作者', commits: 'コミット', changes: '変更', me: '自分', noTodayCommits: '本日のコミットなし' },
     analytics: { title: 'データ分析', noData: 'データなし', additions: '追加', deletions: '削除', developer: '開発者' },
     weather: { current: '現在の天気', forecast: '7日間予報', humidity: '湿度', wind: '風速', feelsLike: '体感温度', loading: '読込中...', unavailable: '天気データなし', today: '今日', unitC: '°C', unitKmh: 'km/h', unitPercent: '%', daysOfWeek: ['日','月','火','水','木','金','土'] }

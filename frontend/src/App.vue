@@ -45,6 +45,10 @@
           <span class="nav-icon">▤</span>
           {{ t('nav.repos') }}
         </a>
+        <a @click="setView('toolbox')" :class="{ active: currentView === 'toolbox' }">
+          <span class="nav-icon">⌘</span>
+          {{ t('nav.toolbox') }}
+        </a>
         <a @click="setView('gitee')" :class="{ active: currentView === 'gitee' }">
           <span class="nav-icon">◆</span>
           {{ t('nav.gitee') }}
@@ -93,6 +97,7 @@ import { loadScanPath } from './stores/data'
 import MatrixRain from './components/MatrixRain.vue'
 import BootSequence from './components/BootSequence.vue'
 
+const Toolbox = defineAsyncComponent(() => import('./views/Toolbox.vue'))
 const Dashboard = defineAsyncComponent(() => import('./views/Dashboard.vue'))
 const Analytics = defineAsyncComponent(() => import('./views/Analytics.vue'))
 const TokenAnalytics = defineAsyncComponent(() => import('./views/TokenAnalytics.vue'))
@@ -100,7 +105,7 @@ const RepoSection = defineAsyncComponent(() => import('./views/RepoSection.vue')
 const Settings = defineAsyncComponent(() => import('./views/Settings.vue'))
 const GiteeStats = defineAsyncComponent(() => import('./views/GiteeStats.vue'))
 
-const componentMap = { dashboard: Dashboard, analytics: Analytics, tokens: TokenAnalytics, repos: RepoSection, gitee: GiteeStats, settings: Settings }
+const componentMap = { dashboard: Dashboard, analytics: Analytics, tokens: TokenAnalytics, repos: RepoSection, gitee: GiteeStats, toolbox: Toolbox, settings: Settings }
 
 const { t, locale, setLocale } = useI18n()
 const currentView = ref(localStorage.getItem('currentView') || 'dashboard')

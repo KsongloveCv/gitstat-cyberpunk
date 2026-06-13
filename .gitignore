@@ -11,10 +11,13 @@ __pycache__/
 frontend/dist/
 build/
 
-# IDE
+# IDE / local tooling
 .DS_Store
 .idea/
 .vscode/
+.claude/
+.superpowers/
+docs/superpowers/
 
 # Environment
 .env
