@@ -48,6 +48,7 @@ _rate_lock = threading.Lock()
 
 def _check_rate(max_req=30, window=60):
     """Thread-safe sliding-window rate limiter for Gitee API calls."""
+    global _rate_last_purge
     now = time.time()
     with _rate_lock:
         # Periodic eviction of stale keys (every 5 minutes)

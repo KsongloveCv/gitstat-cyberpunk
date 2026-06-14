@@ -5,6 +5,7 @@ FastAPI + uvicorn，零外部依赖（除 fastapi/uvicorn）
 功能完全对齐 Go 版本后端
 """
 
+import asyncio
 import subprocess
 import os
 import sys
