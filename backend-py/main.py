@@ -5,7 +5,6 @@ FastAPI + uvicorn，零外部依赖（除 fastapi/uvicorn）
 功能完全对齐 Go 版本后端
 """
 
-import asyncio
 import subprocess
 import os
 import sys
@@ -19,12 +18,8 @@ import urllib.parse
 import logging
 import logging.handlers
 from pathlib import Path
-from config import (
-    VERSION, MAX_COMMITS_PER_REPO, DEFAULT_HOST, DEFAULT_PORT, FRONTEND_DIST, GITSTAT_HOME,
-    DEFAULT_SCAN_ROOT, SCAN_SKIP_DIR_NAMES,
-)
 
-LOG_DIR = GITSTAT_HOME
+LOG_DIR = Path.home() / ".gitstat"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
     level=logging.WARNING,
@@ -64,6 +59,11 @@ from security import (
     validate_gitee_clone_url, safe_static_path, verify_api_key, clamp_limit,
     ALLOWED_ORIGINS, API_KEY,
 )
+from config import (
+    VERSION, MAX_COMMITS_PER_REPO, DEFAULT_HOST, DEFAULT_PORT, FRONTEND_DIST,
+    DEFAULT_SCAN_ROOT, SCAN_SKIP_DIR_NAMES,
+)
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  FASTAPI APP
 
@@ -732,7 +732,6 @@ async def api_set_scan_path(request: Request):
     path = body.get("path", "")
     validate_scan_path(path)
     resolved = await asyncio.to_thread(resolve_scan_path, path)
-    database.init_db()
     store.clear_all()
     database.clear_repo_data()
     store.set_scan_path(resolved)
@@ -1812,9 +1811,6 @@ if _has_static:
             ext = file_path.suffix.lower()
             media = _MIME_MAP.get(ext, "application/octet-stream")
             return FileResponse(file_path, media_type=media)
-
-        if full_path.startswith(("assets/", "favicon", "manifest")):
-            raise HTTPException(404, "Static asset not found")
 
         # 其余所有路径 → index.html（SPA fallback）
         return FileResponse(
