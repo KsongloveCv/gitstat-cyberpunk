@@ -2,12 +2,42 @@
 # GitStat Netrunner Edition — 启动脚本
 # 用法: ./scripts/start.sh [--no-browser]
 
-PROJECT_DIR="/Users/songkang/Desktop/AI-Test/004-gitstat-cyberpunk"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="/tmp/gitstat"
 PID_FILE="$LOG_DIR/backend.pid"
 BACKEND_PORT=12580
 
 mkdir -p "$LOG_DIR"
+
+ensure_frontend_dist() {
+    local index_file="$PROJECT_DIR/frontend/dist/index.html"
+    local needs_build=0
+
+    if [ ! -f "$index_file" ]; then
+        needs_build=1
+    else
+        local asset
+        asset=$(grep -o 'src="/assets/[^"]*\.js"' "$index_file" | head -1 | sed 's#src="/##;s#"$##')
+        if [ -z "$asset" ] || [ ! -f "$PROJECT_DIR/frontend/dist/$asset" ]; then
+            needs_build=1
+        fi
+    fi
+
+    if [ "$needs_build" -eq 0 ]; then
+        return
+    fi
+
+    echo "前端构建产物缺失，正在构建..."
+    cd "$PROJECT_DIR/frontend" || exit 1
+    if [ ! -d node_modules ]; then
+        npm ci
+    fi
+    npm run build
+    cd "$PROJECT_DIR" || exit 1
+}
+
+ensure_frontend_dist
 
 # 如果已经在运行，先停掉
 if [ -f "$PID_FILE" ]; then
@@ -23,9 +53,19 @@ fi
 # 确保端口没被占用
 PID_ON_PORT=$(lsof -ti :$BACKEND_PORT 2>/dev/null)
 if [ -n "$PID_ON_PORT" ]; then
-    echo "端口 $BACKPORT 被占用，清理..."
+    echo "端口 $BACKEND_PORT 被占用，清理..."
     kill "$PID_ON_PORT" 2>/dev/null
-    sleep 2
+    for i in $(seq 1 10); do
+        sleep 1
+        if [ -z "$(lsof -ti :$BACKEND_PORT 2>/dev/null)" ]; then
+            break
+        fi
+    done
+    if [ -n "$(lsof -ti :$BACKEND_PORT 2>/dev/null)" ]; then
+        echo "端口 $BACKEND_PORT 仍被占用，无法启动当前服务"
+        lsof -nP -iTCP:$BACKEND_PORT -sTCP:LISTEN
+        exit 1
+    fi
 fi
 
 # 启动后端
@@ -39,6 +79,11 @@ echo "后端启动 PID=$BACKEND_PID 端口=$BACKEND_PORT"
 READY=0
 for i in $(seq 1 15); do
     sleep 1
+    if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+        echo "后端进程已退出，检查日志: $LOG_DIR/backend.log"
+        tail -20 "$LOG_DIR/backend.log"
+        exit 1
+    fi
     if curl -s --max-time 2 "http://localhost:$BACKEND_PORT/api/stats/overview" > /dev/null 2>&1; then
         READY=1
         echo "后端就绪! (${i}s)"

@@ -67,6 +67,7 @@ let lineIndex = 0
 let charIndex = 0
 let timerId = null
 let completionTimerId = null
+let skipHintTimerId = null
 let skipped = false
 
 function typeNextChar() {
@@ -143,13 +144,14 @@ function onKeydown() {
 
 onMounted(() => {
   timerId = setTimeout(typeNextChar, 200)
-  setTimeout(() => { showSkipHint.value = true }, 1500)
+  skipHintTimerId = setTimeout(() => { showSkipHint.value = true }, 1500)
   window.addEventListener('keydown', onKeydown)
 })
 
 onBeforeUnmount(() => {
   if (timerId) clearTimeout(timerId)
   if (completionTimerId) clearTimeout(completionTimerId)
+  if (skipHintTimerId) clearTimeout(skipHintTimerId)
   window.removeEventListener('keydown', onKeydown)
 })
 </script>

@@ -9,6 +9,12 @@ __pycache__/
 
 # Build artifacts
 frontend/dist/
+!frontend/dist/
+!frontend/dist/index.html
+!frontend/dist/favicon.svg
+!frontend/dist/manifest.json
+!frontend/dist/assets/
+!frontend/dist/assets/*
 build/
 
 # IDE

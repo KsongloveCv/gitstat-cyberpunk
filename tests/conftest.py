@@ -1,4 +1,5 @@
 """Pytest fixtures for GitStat API tests."""
+import os
 import sys
 from pathlib import Path
 
@@ -6,17 +7,22 @@ import pytest
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).parent.parent
+os.environ.setdefault("GITSTAT_HOME", str(ROOT / ".pytest_cache" / "gitstat-home"))
 sys.path.insert(0, str(ROOT / "backend-py"))
 
 from store import store  # noqa: E402
+import database  # noqa: E402
 from main import app  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def reset_store():
+    database.init_db()
+    database.clear_all()
     store.clear_all()
     yield
     store.clear_all()
+    database.clear_all()
 
 
 @pytest.fixture

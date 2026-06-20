@@ -5,9 +5,10 @@ import threading
 import logging
 from datetime import datetime
 from pathlib import Path
+from config import GITSTAT_HOME
 
 log = logging.getLogger('gitstat.db')
-DB_PATH = Path.home() / ".gitstat" / "gitstat.db"
+DB_PATH = GITSTAT_HOME / "gitstat.db"
 
 
 def _get_conn() -> sqlite3.Connection:

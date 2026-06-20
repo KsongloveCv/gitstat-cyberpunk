@@ -9,12 +9,9 @@ from pathlib import Path
 import time
 from fastapi import APIRouter, Query, Request, HTTPException
 from fastapi.responses import JSONResponse
+from config import GITEE_API_BASE, GITEE_ACCESS_TOKEN, GITEE_CACHE_DIR
 from store import store
 from git_utils import run_git_log, get_repo_meta
-
-GITEE_API_BASE = "https://gitee.com/api/v5"
-GITEE_CACHE_DIR = Path.home() / ".gitstat-gitee-cache"
-GITEE_ACCESS_TOKEN = __import__("os").environ.get("GITEE_TOKEN", "")
 
 
 def _gitee_request(url: str, retries: int = 3) -> dict:
@@ -48,6 +45,7 @@ _rate_lock = threading.Lock()
 
 def _check_rate(max_req=30, window=60):
     """Thread-safe sliding-window rate limiter for Gitee API calls."""
+    global _rate_last_purge
     now = time.time()
     with _rate_lock:
         # Periodic eviction of stale keys (every 5 minutes)
