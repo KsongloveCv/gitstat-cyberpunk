@@ -10,6 +10,7 @@ FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 GITSTAT_HOME = Path(os.environ.get("GITSTAT_HOME", Path.home() / ".gitstat")).expanduser()
 DEFAULT_SCAN_ROOT = str(Path.home())
 
+# Skip noisy/system/cache dirs when recursively discovering repos under home.
 SCAN_SKIP_DIR_NAMES = frozenset({
     "Library", "Applications", "node_modules", ".npm", ".cache",
     ".Trash", "Trash", ".codex", ".nvm", ".gitstat-gitee-cache",

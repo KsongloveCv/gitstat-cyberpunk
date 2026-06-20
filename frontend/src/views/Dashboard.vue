@@ -52,6 +52,9 @@
       
       <!-- 连续贡献天数 -->
       <StreakCard />
+
+      <!-- GitHub 风格贡献热力图 -->
+      <ContributionHeatmap />
       
       <!-- 本周趋势 + 作者排行榜 -->
       <div class="insight-grid">
@@ -234,6 +237,7 @@ import { state, fetchOverviewStats, fetchRepoDailyTrend, fetchAuthorRank, loadDa
 import { fetchWeather } from '../stores/weather'
 import StatCard from '../components/StatCard.vue'
 import StreakCard from '../components/StreakCard.vue'
+import ContributionHeatmap from '../components/ContributionHeatmap.vue'
 import WeatherCard from '../components/WeatherCard.vue'
 import echarts from '../utils/echarts'
 import { CHART_COLORS } from '../utils/constants'

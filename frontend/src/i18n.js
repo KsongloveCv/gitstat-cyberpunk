@@ -166,6 +166,17 @@ const messages = {
       commits: '次提交',
       keepGoing: '距离最长记录'
     },
+    contribution: {
+      subtitle: 'CONTRIBUTION GRAPH',
+      loading: '加载贡献日历...',
+      noData: '暂无提交记录',
+      mon: '一',
+      wed: '三',
+      fri: '五',
+      less: '少',
+      more: '多',
+      commitsUnit: '次提交'
+    },
     token: {
       title: 'TOKEN 消耗分析',
       subtitle: '模型用量 · 成本追踪 · 多维度洞察',
@@ -435,6 +446,17 @@ const messages = {
       last30Days: 'Last 30 Days',
       commits: 'commits',
       keepGoing: 'Progress to longest'
+    },
+    contribution: {
+      subtitle: 'CONTRIBUTION GRAPH',
+      loading: 'Loading contribution graph...',
+      noData: 'No commits in this period',
+      mon: 'Mon',
+      wed: 'Wed',
+      fri: 'Fri',
+      less: 'Less',
+      more: 'More',
+      commitsUnit: 'contributions'
     },
     token: {
       title: 'TOKEN ANALYTICS',

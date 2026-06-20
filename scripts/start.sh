@@ -1,12 +1,21 @@
 #!/bin/bash
 # GitStat Netrunner Edition — 启动脚本
-# 用法: ./scripts/start.sh [--no-browser]
+# 用法: ./scripts/start.sh [scan_path] [--no-browser]
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="/tmp/gitstat"
 PID_FILE="$LOG_DIR/backend.pid"
 BACKEND_PORT=12580
+SCAN_PATH="$HOME"
+
+for arg in "$@"; do
+    if [ "$arg" = "--no-browser" ]; then
+        :
+    else
+        SCAN_PATH="$arg"
+    fi
+done
 
 mkdir -p "$LOG_DIR"
 
@@ -70,7 +79,7 @@ fi
 
 # 启动后端
 cd "$PROJECT_DIR/backend-py"
-nohup python3 main.py > "$LOG_DIR/backend.log" 2>&1 &
+nohup python3 main.py "$SCAN_PATH" --no-browser > "$LOG_DIR/backend.log" 2>&1 &
 BACKEND_PID=$!
 echo "$BACKEND_PID" > "$PID_FILE"
 echo "后端启动 PID=$BACKEND_PID 端口=$BACKEND_PORT"
@@ -84,7 +93,7 @@ for i in $(seq 1 15); do
         tail -20 "$LOG_DIR/backend.log"
         exit 1
     fi
-    if curl -s --max-time 2 "http://localhost:$BACKEND_PORT/api/stats/overview" > /dev/null 2>&1; then
+    if curl -s --max-time 2 "http://localhost:$BACKEND_PORT/health" > /dev/null 2>&1; then
         READY=1
         echo "后端就绪! (${i}s)"
         break

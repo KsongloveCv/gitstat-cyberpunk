@@ -147,6 +147,11 @@ export async function getStreakStats(repos = []) {
   return data.data
 }
 
+export async function getContributionCalendar(repos = [], days = 365) {
+  const data = await apiGet('/stats/contribution-calendar', { repo: repos, days })
+  return data.data
+}
+
 // ━━━ Token Analytics ━━━
 
 export async function getTokenStats(range = 'thisWeek', model = 'all') {

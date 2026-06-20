@@ -19,7 +19,10 @@ import urllib.parse
 import logging
 import logging.handlers
 from pathlib import Path
-from config import VERSION, MAX_COMMITS_PER_REPO, DEFAULT_HOST, DEFAULT_PORT, FRONTEND_DIST, GITSTAT_HOME
+from config import (
+    VERSION, MAX_COMMITS_PER_REPO, DEFAULT_HOST, DEFAULT_PORT, FRONTEND_DIST, GITSTAT_HOME,
+    DEFAULT_SCAN_ROOT, SCAN_SKIP_DIR_NAMES,
+)
 
 LOG_DIR = GITSTAT_HOME
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -107,25 +110,42 @@ def resolve_scan_path(path: str) -> str:
     return str(p)
 
 
+def _should_skip_dir_name(name: str) -> bool:
+    return name in SCAN_SKIP_DIR_NAMES or name == ".git"
+
+
 def discover_repos(root_path: str) -> list[dict]:
-    """扫描目录下所有 Git 仓库。"""
-    repos = []
-    p = Path(root_path)
+    """递归扫描 root_path 下所有 Git 仓库（跳过系统/缓存目录）。"""
+    root = Path(root_path).expanduser().resolve()
+    if not root.exists() or not root.is_dir():
+        return []
 
-    # 检查 root_path 本身是不是 git repo
-    if (p / ".git").exists():
-        meta = scan_metadata(str(p))
-        if meta:
-            repos.append(meta)
+    repos: list[dict] = []
+    seen: set[str] = set()
 
-    # 检查子目录
-    if p.is_dir():
-        for entry in p.iterdir():
-            if entry.is_dir() and (entry / ".git").exists():
-                meta = scan_metadata(str(entry))
-                if meta:
-                    repos.append(meta)
+    def walk(base: Path) -> None:
+        try:
+            with os.scandir(base) as entries:
+                for entry in entries:
+                    if not entry.is_dir(follow_symlinks=False):
+                        continue
+                    name = entry.name
+                    if _should_skip_dir_name(name):
+                        continue
+                    path = Path(entry.path)
+                    if (path / ".git").is_dir():
+                        resolved = str(path.resolve())
+                        if resolved not in seen:
+                            meta = scan_metadata(resolved)
+                            if meta:
+                                repos.append(meta)
+                                seen.add(resolved)
+                    walk(path)
+        except (OSError, PermissionError) as exc:
+            log.debug("Skip unreadable directory %s: %s", base, exc)
 
+    walk(root)
+    repos.sort(key=lambda r: r.get("lastCommitTime") or "", reverse=True)
     return repos
 
 
@@ -1595,15 +1615,9 @@ async def set_budget(request: Request):
 #  STREAK — 连续贡献天数统计
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def _calc_streak(repo_list: list, repos_filter: Optional[list] = None) -> dict:
-    """
-    计算连续贡献天数（current streak / longest streak / weekly active / last 30 days）。
-    基于 daily 统计数据，从今天往前回溯。
-    """
-    today = date.today()
-    # 收集所有每日提交数据，按日期聚合
-    daily_map: dict[str, int] = {}  # date_str → total_commits
-
+def _build_daily_commit_map(repo_list: list, repos_filter: Optional[list] = None) -> dict[str, int]:
+    """按日期聚合所有作者的提交次数。"""
+    daily_map: dict[str, int] = {}
     for repo in repo_list:
         if repos_filter and repo.get("repoPath") not in repos_filter and repo.get("repoName") not in repos_filter:
             continue
@@ -1612,6 +1626,44 @@ def _calc_streak(repo_list: list, repos_filter: Optional[list] = None) -> dict:
                 ds = day.get("date", "")
                 if ds:
                     daily_map[ds] = daily_map.get(ds, 0) + day.get("commits", 0)
+    return daily_map
+
+
+def _calc_contribution_calendar(repo_list: list, repos_filter: Optional[list] = None,
+                                days: int = 365) -> dict:
+    """最近 N 天每日提交数（GitHub 贡献图数据源）。"""
+    daily_map = _build_daily_commit_map(repo_list, repos_filter)
+    today = date.today()
+    range_start = today - timedelta(days=days - 1)
+
+    cells = []
+    total = 0
+    cur = range_start
+    while cur <= today:
+        ds = cur.strftime("%Y-%m-%d")
+        commits = daily_map.get(ds, 0)
+        total += commits
+        cells.append({
+            "date": ds,
+            "commits": commits,
+            "isToday": cur == today,
+        })
+        cur += timedelta(days=1)
+
+    return {
+        "totalContributions": total,
+        "days": days,
+        "cells": cells,
+    }
+
+
+def _calc_streak(repo_list: list, repos_filter: Optional[list] = None) -> dict:
+    """
+    计算连续贡献天数（current streak / longest streak / weekly active / last 30 days）。
+    基于 daily 统计数据，从今天往前回溯。
+    """
+    today = date.today()
+    daily_map = _build_daily_commit_map(repo_list, repos_filter)
 
     # ---- 连续天数计算 ----
     streak_current = 0
@@ -1717,6 +1769,23 @@ async def streak_stats(
     return JSONResponse({"data": result})
 
 
+@app.get("/api/stats/contribution-calendar")
+async def contribution_calendar(
+    repo: Optional[str] = Query(None),
+    days: int = Query(365, ge=30, le=366),
+):
+    """最近 N 天贡献日历（GitHub 风格热力图）。"""
+    repos_filter = [repo] if repo else []
+    start = datetime.now() - timedelta(days=days)
+    end = datetime.now()
+    ensure_data_loaded(repos_filter, start)
+    repos = _load_repos(repos_filter)
+    user = _resolve_user_email(repos, "")
+    repo_list = aggregate_daily_stats(repos, user, start, end)
+    result = _calc_contribution_calendar(repo_list, repos_filter if repo else None, days)
+    return JSONResponse({"data": result})
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  STATIC FILES — 前端 SPA
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1783,8 +1852,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="GitStat Netrunner Edition — Python Backend"
     )
-    parser.add_argument("scan_path", nargs="?", default=os.getcwd(),
-                        help="Git 仓库扫描目录（默认: 当前目录）")
+    parser.add_argument("scan_path", nargs="?", default=None,
+                        help=f"Git 仓库扫描目录（默认: 已保存路径或 {DEFAULT_SCAN_ROOT}）")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT,
                         help="监听端口（默认: 12580）")
     parser.add_argument("--host", type=str, default=DEFAULT_HOST,
@@ -1796,11 +1865,12 @@ if __name__ == "__main__":
     # Prefer a saved path that still contains repos; otherwise resolve cwd/arg
     saved_path = database.get_scan_path()
     resolved_saved = resolve_scan_path(saved_path) if saved_path else ""
-    resolved_arg = resolve_scan_path(args.scan_path or os.getcwd())
-    if resolved_saved and discover_repos(resolved_saved):
+    if args.scan_path is not None:
+        args.scan_path = resolve_scan_path(args.scan_path)
+    elif resolved_saved and discover_repos(resolved_saved):
         args.scan_path = resolved_saved
     else:
-        args.scan_path = resolved_arg
+        args.scan_path = resolve_scan_path(DEFAULT_SCAN_ROOT)
     database.save_scan_path(args.scan_path)
     store.set_scan_path(args.scan_path)
     repos = discover_repos(args.scan_path)
